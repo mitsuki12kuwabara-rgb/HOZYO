@@ -6,7 +6,7 @@ const {
   handleFollow, startRegistration,
   handleName, handleAge, handleSport,
   handleStudentId, handleTournamentName, handleTournamentProof,
-  handleConfirmInput, handleMatchingCheck, handleInquiry,
+  handleConfirmInput, handleMatchingCheck, handleInquiry, handleDetails,
 } = require('./flow');
 const { handlePostback }   = require('./admin');
 const { resendCertificate } = require('./certificate');
@@ -57,10 +57,11 @@ async function handleEvent(event) {
   // リッチメニューキーワードを最優先
   if (event.message.type === 'text') {
     const t = event.message.text;
-    if (t === 'コーチ登録する') { await startRegistration(userId, event.replyToken); return; }
+    if (t === 'コーチ登録する' || t === '応募') { await startRegistration(userId, event.replyToken); return; }
+    if (t === '詳細')           { await handleDetails(userId, event.replyToken); return; }
     if (t === '登録証を見る')   { await resendCertificate(userId, event.replyToken); return; }
     if (t === 'マッチング確認') { await handleMatchingCheck(userId, event.replyToken); return; }
-    if (t === 'お問い合わせ')   { await handleInquiry(userId, event.replyToken); return; }
+    if (t === 'お問い合わせ' || t === '問い合わせ') { await handleInquiry(userId, event.replyToken); return; }
   }
 
   // 登録フロー

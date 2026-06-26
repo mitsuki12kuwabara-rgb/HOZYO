@@ -254,6 +254,125 @@ function row(label, value) {
   };
 }
 
+// ── 詳細情報 ──
+async function handleDetails(userId, replyToken) {
+  await client.replyMessage(replyToken, [
+    {
+      type: 'flex',
+      altText: '【HOZYO!!】求人詳細',
+      contents: {
+        type: 'bubble',
+        size: 'mega',
+        header: {
+          type: 'box', layout: 'vertical', paddingAll: '16px',
+          backgroundColor: '#F5E642',
+          contents: [
+            { type: 'text', text: '体育会外部コーチ派遣事業', weight: 'bold', size: 'md', color: '#000000' },
+            { type: 'text', text: '全国経験者だけができるアルバイト', weight: 'bold', size: 'xl', color: '#000000', margin: 'sm', wrap: true },
+          ],
+        },
+        body: {
+          type: 'box', layout: 'vertical', paddingAll: '16px', spacing: 'md',
+          contents: [
+            {
+              type: 'box', layout: 'horizontal', spacing: 'sm',
+              contents: [
+                { type: 'text', text: '💰', size: 'xl', flex: 0 },
+                {
+                  type: 'box', layout: 'vertical', flex: 1,
+                  contents: [
+                    { type: 'text', text: '時給', size: 'sm', color: '#888888' },
+                    { type: 'text', text: '1,600円〜', weight: 'bold', size: 'xl', color: '#e05c2a' },
+                  ],
+                },
+              ],
+            },
+            { type: 'separator' },
+            { type: 'text', text: '📌 仕事内容', weight: 'bold', size: 'md' },
+            { type: 'text', text: '小・中学生のクラブチームや部活動の外部コーチとして活動していただきます。全国大会出場経験を活かして、次世代の選手たちをサポートする仕事です。', size: 'sm', wrap: true, color: '#333333' },
+            { type: 'separator' },
+            { type: 'text', text: '🏅 応募資格', weight: 'bold', size: 'md' },
+            {
+              type: 'box', layout: 'vertical', spacing: 'sm',
+              contents: [
+                { type: 'text', text: '✅ 大学在学中', size: 'sm', color: '#333333' },
+                { type: 'text', text: '✅ 全国大会出場経験あり', size: 'sm', color: '#333333' },
+                { type: 'text', text: '✅ バスケ・サッカー・野球いずれか', size: 'sm', color: '#333333' },
+              ],
+            },
+            { type: 'separator' },
+            { type: 'text', text: '🌟 こんな方にピッタリ', weight: 'bold', size: 'md' },
+            { type: 'text', text: '「競技を続けながら稼ぎたい」\n「スポーツで社会貢献したい」\n「将来、指導者を目指している」', size: 'sm', wrap: true, color: '#333333' },
+            { type: 'separator' },
+            { type: 'text', text: '📍 勤務地・シフト', weight: 'bold', size: 'md' },
+            { type: 'text', text: '週1日〜OK・自分のスケジュールに合わせて調整可能。活動地域はマッチング後に決定します。', size: 'sm', wrap: true, color: '#333333' },
+          ],
+        },
+        footer: {
+          type: 'box', layout: 'vertical', paddingAll: '12px',
+          backgroundColor: '#F5E642',
+          contents: [
+            {
+              type: 'button', style: 'primary', color: '#000000',
+              action: { type: 'message', label: '📝 今すぐ応募する', text: '応募' },
+            },
+          ],
+        },
+      },
+    },
+  ]);
+}
+
+// ── 問い合わせ ──
+async function handleInquiry(userId, replyToken) {
+  await client.pushMessage(adminUserId, [{
+    type: 'text',
+    text: `📞 お問い合わせがありました\nLine ID: ${userId}\n\n直接このユーザーにご連絡ください。`,
+  }]);
+  await client.replyMessage(replyToken, [
+    {
+      type: 'flex',
+      altText: 'お問い合わせ',
+      contents: {
+        type: 'bubble',
+        body: {
+          type: 'box', layout: 'vertical', paddingAll: '20px', spacing: 'md',
+          contents: [
+            { type: 'text', text: 'お問い合わせ', weight: 'bold', size: 'xl' },
+            { type: 'separator', margin: 'md' },
+            {
+              type: 'box', layout: 'horizontal', margin: 'lg', spacing: 'sm',
+              contents: [
+                { type: 'text', text: '📞', size: 'xl', flex: 0 },
+                {
+                  type: 'box', layout: 'vertical', flex: 1,
+                  contents: [
+                    { type: 'text', text: 'お電話はこちら', size: 'sm', color: '#888888' },
+                    { type: 'text', text: '080-8089-0670', weight: 'bold', size: 'lg', color: '#1DB446' },
+                    { type: 'text', text: '受付時間：10:00〜20:00', size: 'xs', color: '#aaaaaa', margin: 'xs' },
+                  ],
+                },
+              ],
+            },
+            { type: 'separator' },
+            { type: 'text', text: '💬 LINEでのご質問', weight: 'bold', size: 'sm', margin: 'md' },
+            { type: 'text', text: 'このトーク画面にメッセージを送っていただければ、担当者が確認次第ご返信いたします。', size: 'sm', wrap: true, color: '#555555' },
+          ],
+        },
+        footer: {
+          type: 'box', layout: 'vertical', paddingAll: '12px',
+          contents: [
+            {
+              type: 'button', style: 'primary', color: '#1DB446',
+              action: { type: 'uri', label: '📞 電話をかける', uri: 'tel:08080890670' },
+            },
+          ],
+        },
+      },
+    },
+  ]);
+}
+
 // ── 登録済みメニュー ──
 async function handleMatchingCheck(userId, replyToken) {
   await client.replyMessage(replyToken, [{
@@ -262,19 +381,9 @@ async function handleMatchingCheck(userId, replyToken) {
   }]);
 }
 
-async function handleInquiry(userId, replyToken) {
-  await client.pushMessage(adminUserId, [{
-    type: 'text',
-    text: `📞 お問い合わせがありました\nLine ID: ${userId}\n\n直接このユーザーにご連絡ください。`,
-  }]);
-  await client.replyMessage(replyToken, [{
-    type: 'text', text: 'お問い合わせを受け付けました。担当者より折り返しご連絡いたします。',
-  }]);
-}
-
 module.exports = {
   handleFollow, startRegistration,
   handleName, handleAge, handleSport,
   handleStudentId, handleTournamentName, handleTournamentProof,
-  handleConfirmInput, handleMatchingCheck, handleInquiry,
+  handleConfirmInput, handleMatchingCheck, handleInquiry, handleDetails,
 };
