@@ -6,7 +6,7 @@
     "start": "node src/index.js"
   },
   "dependencies": {
-    "@line/bot-sdk": "^8.7.0",
+    "@line/bot-sdk": "^7.5.0",
     "axios": "^1.7.0",
     "dotenv": "^16.4.0",
     "express": "^4.19.0"
