@@ -1,4 +1,5 @@
-const { client }                                       = require('./lineClient');
+const lineClient                                       = require('./lineClient');
+const { client }                                       = lineClient;
 const { getSession, saveSession, deleteSession,
         saveUser, getUser }                            = require('./gasClient');
 const { sendCertificate }                              = require('./certificate');
@@ -14,11 +15,16 @@ function qr(items) {
 
 // ── フォロー ──
 async function handleFollow(userId) {
+  // デフォルトリッチメニューをリンク（未登録メニュー）
+  const defaultMenuId = process.env.DEFAULT_RICH_MENU_ID;
+  if (defaultMenuId) {
+    await lineClient.linkRichMenu(userId, defaultMenuId).catch(e => console.error('linkRichMenu follow:', e));
+  }
   await client.pushMessage(userId, [{
     type: 'text',
     text: 'こんにちは！大学生コーチ登録サービスへようこそ🏅\n\n' +
           '全国大会出場経験のある大学生アスリートのコーチ登録を受け付けています。\n\n' +
-          '下のメニューから「コーチ登録する」を押してください。',
+          '下のメニューから「応募」を押してください。',
   }]);
 }
 

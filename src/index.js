@@ -19,6 +19,14 @@ const PORT = process.env.PORT || 3000;
 // ── ヘルスチェック ──
 app.get('/', (req, res) => res.send('LINE Coach Bot ✅'));
 
+// ── リッチメニューID確認（管理者用） ──
+app.get('/richmenu-list', async (req, res) => {
+  if (req.query.secret !== config.adminImageSecret) return res.status(403).send('Forbidden');
+  const { getRichMenuList } = require('./lineClient');
+  const list = await getRichMenuList();
+  res.json(list);
+});
+
 // ── 画像確認エンドポイント（管理者が申請確認時に使用） ──
 app.get('/image', async (req, res) => {
   if (req.query.secret !== config.adminImageSecret) {
