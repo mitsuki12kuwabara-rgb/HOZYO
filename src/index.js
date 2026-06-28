@@ -133,6 +133,7 @@ async function handleClubEvent(event) {
   }
 
   const session = await getClubSession(userId);
+  console.log('CLUB SESSION:', JSON.stringify(session));
   const state   = session?.state || CLUB_STATE.NONE;
 
   const handlers = {
