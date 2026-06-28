@@ -183,39 +183,26 @@ async function handleReqDays(userId, message, replyToken, session) {
 // ── 開始時間 ──
 async function handleReqStart(userId, message, replyToken, session) {
   const text = message.text?.trim();
-  if (!TIMES.includes(text)) {
-    await clubClient.replyMessage(replyToken, [{
-      type: 'text', text: 'ボタンから開始時間を選択してください。',
-      quickReply: qr(TIMES.map(t => [t])),
-    }]);
+  if (!text) {
+    await clubClient.replyMessage(replyToken, [{ type: 'text', text: '開始時間を入力してください。\n（例：9:00）' }]);
     return;
   }
   await saveClubSession(userId, CLUB_STATE.REQ_END, { ...session.tempData, startTime: text });
-  const startIdx = TIMES.indexOf(text);
-  const endTimes = TIMES.filter((_, i) => i > startIdx);
   await clubClient.replyMessage(replyToken, [{
-    type: 'text', text: `開始：${text}\n\n終了時間を選択してください。`,
-    quickReply: qr(endTimes.map(t => [t])),
+    type: 'text', text: `開始：${text}\n\n終了時間を入力してください。\n（例：12:00）`,
   }]);
 }
 
 // ── 終了時間 ──
 async function handleReqEnd(userId, message, replyToken, session) {
   const text = message.text?.trim();
-  const startTime = session.tempData?.startTime;
-  const startIdx = TIMES.indexOf(startTime);
-  const textIdx  = TIMES.indexOf(text);
-  if (!TIMES.includes(text) || textIdx <= startIdx) {
-    const endTimes = TIMES.filter((_, i) => i > startIdx);
-    await clubClient.replyMessage(replyToken, [{
-      type: 'text', text: '開始時間より後の終了時間を選択してください。',
-      quickReply: qr(endTimes.map(t => [t])),
-    }]);
+  if (!text) {
+    await clubClient.replyMessage(replyToken, [{ type: 'text', text: '終了時間を入力してください。\n（例：12:00）' }]);
     return;
   }
   await saveClubSession(userId, CLUB_STATE.REQ_LOCATION, { ...session.tempData, endTime: text });
   await clubClient.replyMessage(replyToken, [{
-    type: 'text', text: `${startTime}〜${text}\n\nコーチ指導の練習場所を入力してください。\n（登録した練習場所と異なる場合も入力してください）`,
+    type: 'text', text: `${session.tempData.startTime}〜${text}\n\nコーチ指導の練習場所を入力してください。\n（登録した練習場所と異なる場合も入力してください）`,
   }]);
 }
 
