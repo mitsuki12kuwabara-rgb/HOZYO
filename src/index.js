@@ -8,9 +8,21 @@ const {
   handleStudentId, handleTournamentName, handleTournamentProof,
   handleConfirmInput, handleMatchingCheck, handleInquiry, handleDetails,
 } = require('./flow');
-const { handlePostback }   = require('./admin');
+const { handlePostback }    = require('./admin');
 const { resendCertificate } = require('./certificate');
-const config               = require('./config');
+const { clubMiddleware, clubClient } = require('./clubClient');
+const { handleClubPostback }        = require('./clubAdmin');
+const {
+  CLUB_STATE,
+  handleClubFollow, startClubRegistration,
+  handleClubName, handleClubSport, handleClubLocation,
+  handleClubAge, handleClubConfirm,
+  startRequest, handleReqDays, handleReqStart,
+  handleReqEnd, handleReqLocation, handleReqConfirm,
+  handleClubInquiry,
+} = require('./clubFlow');
+const { getClubSession }    = require('./gasClient');
+const config                = require('./config');
 
 const { STATE } = config;
 const app  = express();
@@ -94,6 +106,53 @@ async function handleEvent(event) {
     await client.replyMessage(event.replyToken, [{ type: 'text', text: 'メニューからご利用ください。' }]);
   } else {
     await client.replyMessage(event.replyToken, [{ type: 'text', text: '下のメニューから「コーチ登録する」を選択してください。' }]);
+  }
+}
+
+// ── クラブ Webhook ──
+app.post('/webhook-club', clubMiddleware, (req, res) => {
+  res.json({ status: 'ok' });
+  (req.body.events || []).forEach(event =>
+    handleClubEvent(event).catch(err => console.error('Club event error:', err))
+  );
+});
+
+async function handleClubEvent(event) {
+  const userId = event.source.userId;
+
+  if (event.type === 'follow') { await handleClubFollow(userId); return; }
+  if (event.type === 'postback') { await handleClubPostback(userId, event.postback.data, event.replyToken); return; }
+  if (event.type !== 'message') return;
+
+  if (event.message.type === 'text') {
+    const t = event.message.text;
+    if (t === 'クラブ登録する') { await startClubRegistration(userId, event.replyToken); return; }
+    if (t === 'コーチを要請する') { await startRequest(userId, event.replyToken); return; }
+    if (t === '問い合わせ')     { await handleClubInquiry(userId, event.replyToken); return; }
+  }
+
+  const session = await getClubSession(userId);
+  const state   = session?.state || CLUB_STATE.NONE;
+
+  const handlers = {
+    [CLUB_STATE.NAME]:         handleClubName,
+    [CLUB_STATE.SPORT]:        handleClubSport,
+    [CLUB_STATE.LOCATION]:     handleClubLocation,
+    [CLUB_STATE.AGE]:          handleClubAge,
+    [CLUB_STATE.CONFIRM]:      handleClubConfirm,
+    [CLUB_STATE.REQ_DAYS]:     handleReqDays,
+    [CLUB_STATE.REQ_START]:    handleReqStart,
+    [CLUB_STATE.REQ_END]:      handleReqEnd,
+    [CLUB_STATE.REQ_LOCATION]: handleReqLocation,
+    [CLUB_STATE.REQ_CONFIRM]:  handleReqConfirm,
+  };
+
+  if (handlers[state]) {
+    await handlers[state](userId, event.message, event.replyToken, session);
+  } else {
+    await clubClient.replyMessage(event.replyToken, [{
+      type: 'text', text: '「クラブ登録する」または「コーチを要請する」と送信してください。',
+    }]);
   }
 }
 

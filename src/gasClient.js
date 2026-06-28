@@ -12,11 +12,22 @@ async function call(op, data) {
 }
 
 module.exports = {
-  setup:         ()                          => call('setup'),
-  getSession:    (userId)                    => call('getSession',    { userId }),
-  saveSession:   (userId, state, tempData)   => call('saveSession',   { userId, state, tempData }),
-  deleteSession: (userId)                    => call('deleteSession', { userId }),
-  saveUser:      (userId, data)              => call('saveUser',      { userId, data }),
-  getUser:       (userId)                    => call('getUser',       { userId }),
-  updateStatus:  (userId, status, approvedAt)=> call('updateStatus',  { userId, status, approvedAt }),
+  // コーチ側
+  setup:         ()                           => call('setup'),
+  getSession:    (userId)                     => call('getSession',    { userId }),
+  saveSession:   (userId, state, tempData)    => call('saveSession',   { userId, state, tempData }),
+  deleteSession: (userId)                     => call('deleteSession', { userId }),
+  saveUser:      (userId, data)               => call('saveUser',      { userId, data }),
+  getUser:       (userId)                     => call('getUser',       { userId }),
+  updateStatus:  (userId, status, approvedAt) => call('updateStatus',  { userId, status, approvedAt }),
+  // クラブ側
+  getClubSession:    (userId)                  => call('getClubSession',    { userId }),
+  saveClubSession:   (userId, state, tempData) => call('saveClubSession',   { userId, state, tempData }),
+  deleteClubSession: (userId)                  => call('deleteClubSession', { userId }),
+  saveClub:          (userId, data)            => call('saveClub',          { userId, data }),
+  getClub:           (userId)                  => call('getClub',           { userId }),
+  saveRequest:       (userId, data)            => call('saveRequest',       { userId, data }),
+  getRequest:        (requestId)               => call('getRequest',        { requestId }),
+  updateRequest:     (requestId, status, coachUserId) => call('updateRequest', { requestId, status, coachUserId }),
+  getCoachesBySport: (sport)                   => call('getCoachesBySport', { sport }),
 };

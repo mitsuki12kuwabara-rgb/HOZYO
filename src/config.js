@@ -14,7 +14,12 @@ module.exports = {
     channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN,
     channelSecret:      process.env.LINE_CHANNEL_SECRET,
   },
+  club: {
+    channelAccessToken: process.env.CLUB_LINE_CHANNEL_ACCESS_TOKEN,
+    channelSecret:      process.env.CLUB_LINE_CHANNEL_SECRET,
+  },
   adminUserId:       process.env.ADMIN_LINE_USER_ID,
+  clubAdminUserId:   process.env.CLUB_ADMIN_LINE_USER_ID,
   gasWebAppUrl:      process.env.GAS_WEB_APP_URL,
   gasSecret:         process.env.GAS_SECRET,
   adminImageSecret:  process.env.ADMIN_IMAGE_SECRET,
