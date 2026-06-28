@@ -281,8 +281,56 @@ async function notifyClubAdmin(clubUserId, requestId, d) {
 // ── 問い合わせ ──
 async function handleClubInquiry(userId, replyToken) {
   await clubClient.replyMessage(replyToken, [{
-    type: 'text',
-    text: '📞 お問い合わせ\n\n電話：080-8089-0670\n\nまたはこのチャットでご質問いただければ、担当者が返信いたします。',
+    type: 'flex',
+    altText: 'お問い合わせ',
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box', layout: 'vertical',
+        backgroundColor: '#ffffff',
+        contents: [{ type: 'text', text: 'お問い合わせ', weight: 'bold', size: 'xl', color: '#333333' }],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'md',
+        contents: [
+          {
+            type: 'box', layout: 'horizontal', spacing: 'sm',
+            contents: [
+              { type: 'icon', url: 'https://scdn.line-apps.com/n/channel_devcenter/img/fx/review_gold_star_28.png', size: 'sm' },
+              {
+                type: 'box', layout: 'vertical',
+                contents: [
+                  { type: 'text', text: 'お電話はこちら', size: 'xs', color: '#888888' },
+                  { type: 'text', text: '080-8089-0670', weight: 'bold', size: 'lg', color: '#1DB446' },
+                  { type: 'text', text: '受付時間：10:00〜20:00', size: 'xs', color: '#888888' },
+                ],
+              },
+            ],
+          },
+          { type: 'separator' },
+          {
+            type: 'box', layout: 'horizontal', spacing: 'sm',
+            contents: [
+              { type: 'icon', url: 'https://scdn.line-apps.com/n/channel_devcenter/img/fx/review_gold_star_28.png', size: 'sm' },
+              {
+                type: 'box', layout: 'vertical',
+                contents: [
+                  { type: 'text', text: 'LINEでのご質問', weight: 'bold', size: 'sm', color: '#333333' },
+                  { type: 'text', text: 'このトーク画面にメッセージを送っていただければ、担当者が確認次第ご返信いたします。', size: 'xs', color: '#555555', wrap: true },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical',
+        contents: [{
+          type: 'button', style: 'primary', color: '#1DB446',
+          action: { type: 'uri', label: '📞 電話をかける', uri: 'tel:0808089-0670' },
+        }],
+      },
+    },
   }]);
 }
 

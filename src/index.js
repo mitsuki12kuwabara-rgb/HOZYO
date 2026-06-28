@@ -129,7 +129,7 @@ async function handleClubEvent(event) {
     const t = event.message.text;
     if (t === 'クラブ登録する') { await startClubRegistration(userId, event.replyToken); return; }
     if (t === 'コーチを要請する') { await startRequest(userId, event.replyToken); return; }
-    if (t === '問い合わせ')     { await handleClubInquiry(userId, event.replyToken); return; }
+    if (t === 'お問い合わせ' || t === '問い合わせ') { await handleClubInquiry(userId, event.replyToken); return; }
   }
 
   const session = await getClubSession(userId);
