@@ -112,9 +112,10 @@ async function handleEvent(event) {
 // ── クラブ Webhook ──
 app.post('/webhook-club', clubMiddleware, (req, res) => {
   res.json({ status: 'ok' });
-  (req.body.events || []).forEach(event =>
-    handleClubEvent(event).catch(err => console.error('Club event error:', err))
-  );
+  (req.body.events || []).forEach(event => {
+    console.log('CLUB USER ID:', event.source?.userId, '| type:', event.type);
+    handleClubEvent(event).catch(err => console.error('Club event error:', err));
+  });
 });
 
 async function handleClubEvent(event) {
