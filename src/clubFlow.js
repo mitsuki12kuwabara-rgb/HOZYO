@@ -191,7 +191,8 @@ async function handleReqStart(userId, message, replyToken, session) {
     return;
   }
   await saveClubSession(userId, CLUB_STATE.REQ_END, { ...session.tempData, startTime: text });
-  const endTimes = TIMES.filter(t => t > text);
+  const startIdx = TIMES.indexOf(text);
+  const endTimes = TIMES.filter((_, i) => i > startIdx);
   await clubClient.replyMessage(replyToken, [{
     type: 'text', text: `開始：${text}\n\n終了時間を選択してください。`,
     quickReply: qr(endTimes.map(t => [t])),
@@ -202,8 +203,10 @@ async function handleReqStart(userId, message, replyToken, session) {
 async function handleReqEnd(userId, message, replyToken, session) {
   const text = message.text?.trim();
   const startTime = session.tempData?.startTime;
-  if (!TIMES.includes(text) || text <= startTime) {
-    const endTimes = TIMES.filter(t => t > startTime);
+  const startIdx = TIMES.indexOf(startTime);
+  const textIdx  = TIMES.indexOf(text);
+  if (!TIMES.includes(text) || textIdx <= startIdx) {
+    const endTimes = TIMES.filter((_, i) => i > startIdx);
     await clubClient.replyMessage(replyToken, [{
       type: 'text', text: '開始時間より後の終了時間を選択してください。',
       quickReply: qr(endTimes.map(t => [t])),
