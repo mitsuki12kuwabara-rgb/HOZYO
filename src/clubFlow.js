@@ -155,8 +155,7 @@ async function handleReqDays(userId, message, replyToken, session) {
     await saveClubSession(userId, CLUB_STATE.REQ_START, tempData);
     await clubClient.replyMessage(replyToken, [{
       type: 'text',
-      text: `選択した曜日：${selected.join('・')}\n\n開始時間を選択してください。`,
-      quickReply: qr(TIMES.map(t => [t])),
+      text: `選択した曜日：${selected.join('・')}\n\n開始時間を入力してください。\n（例：9:00）`,
     }]);
     return;
   }
