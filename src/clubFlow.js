@@ -40,7 +40,7 @@ async function handleClubFollow(userId) {
 // ── 登録開始 ──
 async function startClubRegistration(userId, replyToken) {
   const club = await getClub(userId);
-  if (club) {
+  if (club && club.userId) {
     await clubClient.replyMessage(replyToken, [{
       type: 'text', text: 'すでに登録済みです。\n「コーチを要請する」からご利用ください。',
     }]);
@@ -126,7 +126,7 @@ async function handleClubConfirm(userId, message, replyToken, session) {
 // ── コーチ要請開始 ──
 async function startRequest(userId, replyToken) {
   const club = await getClub(userId);
-  if (!club) {
+  if (!club || !club.userId) {
     await clubClient.replyMessage(replyToken, [{type:'text',text:'まず「クラブ登録する」から団体登録をしてください。'}]);
     return;
   }
