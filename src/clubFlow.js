@@ -12,11 +12,11 @@ const CLUB_STATE = {
   AGE:          'CLUB_AGE',
   CONFIRM:      'CLUB_CONFIRM',
   REGISTERED:   'CLUB_REGISTERED',
-  REQ_DAYS:     'REQ_DAYS',
-  REQ_START:    'REQ_START',
-  REQ_END:      'REQ_END',
-  REQ_LOCATION: 'REQ_LOCATION',
-  REQ_CONFIRM:  'REQ_CONFIRM',
+  REQ_DAYS:       'REQ_DAYS',
+  REQ_SLOT_START: 'REQ_SLOT_START',
+  REQ_SLOT_END:   'REQ_SLOT_END',
+  REQ_LOCATION:   'REQ_LOCATION',
+  REQ_CONFIRM:    'REQ_CONFIRM',
   CFB_SESSION:  'CLUB_FB_SESSION',
   CFB_RATING:   'CLUB_FB_RATING',
   CFB_COMMENT:  'CLUB_FB_COMMENT',
@@ -144,7 +144,7 @@ async function startRequest(userId, replyToken) {
 
 // ── 曜日選択 ──
 async function handleReqDays(userId, message, replyToken, session) {
-  const text    = message.text?.trim();
+  const text     = message.text?.trim();
   const tempData = session.tempData || {};
   const selected = tempData.days || [];
 
@@ -156,10 +156,10 @@ async function handleReqDays(userId, message, replyToken, session) {
       }]);
       return;
     }
-    await saveClubSession(userId, CLUB_STATE.REQ_START, tempData);
+    await saveClubSession(userId, CLUB_STATE.REQ_SLOT_START, { ...tempData, slots: {}, currentDayIdx: 0 });
     await clubClient.replyMessage(replyToken, [{
       type: 'text',
-      text: `選択した曜日：${selected.join('・')}\n\n開始時間を入力してください。\n（例：9:00）`,
+      text: `✅ 選択曜日：${selected.join('・')}\n\n【${selected[0]}曜日】\n開始時間を入力してください。\n（例：9:00）`,
     }]);
     return;
   }
@@ -168,11 +168,10 @@ async function handleReqDays(userId, message, replyToken, session) {
     if (!selected.includes(text)) selected.push(text);
     await saveClubSession(userId, CLUB_STATE.REQ_DAYS, { ...tempData, days: selected });
     const remaining = DAYS.filter(d => !selected.includes(d));
-    const items = remaining.map(d => [d]).concat([['選択完了', '選択完了']]);
     await clubClient.replyMessage(replyToken, [{
       type: 'text',
       text: `✅ 選択中：${selected.join('・')}\n\n他の曜日も追加するか「選択完了」を押してください。`,
-      quickReply: qr(items),
+      quickReply: qr(remaining.map(d => [d]).concat([['選択完了', '選択完了']])),
     }]);
     return;
   }
@@ -183,30 +182,49 @@ async function handleReqDays(userId, message, replyToken, session) {
   }]);
 }
 
-// ── 開始時間 ──
-async function handleReqStart(userId, message, replyToken, session) {
+// ── 各曜日の開始時間 ──
+async function handleReqSlotStart(userId, message, replyToken, session) {
   const text = message.text?.trim();
   if (!text) {
-    await clubClient.replyMessage(replyToken, [{ type: 'text', text: '開始時間を入力してください。\n（例：9:00）' }]);
+    await clubClient.replyMessage(replyToken, [{ type: 'text', text: '開始時間を入力してください。（例：9:00）' }]);
     return;
   }
-  await saveClubSession(userId, CLUB_STATE.REQ_END, { ...session.tempData, startTime: text });
+  const d = session.tempData;
+  const currentDay = d.days[d.currentDayIdx];
+  await saveClubSession(userId, CLUB_STATE.REQ_SLOT_END, { ...d, currentStart: text });
   await clubClient.replyMessage(replyToken, [{
-    type: 'text', text: `開始：${text}\n\n終了時間を入力してください。\n（例：12:00）`,
+    type: 'text', text: `【${currentDay}曜日】開始：${text}\n\n終了時間を入力してください。（例：12:00）`,
   }]);
 }
 
-// ── 終了時間 ──
-async function handleReqEnd(userId, message, replyToken, session) {
+// ── 各曜日の終了時間 ──
+async function handleReqSlotEnd(userId, message, replyToken, session) {
   const text = message.text?.trim();
   if (!text) {
-    await clubClient.replyMessage(replyToken, [{ type: 'text', text: '終了時間を入力してください。\n（例：12:00）' }]);
+    await clubClient.replyMessage(replyToken, [{ type: 'text', text: '終了時間を入力してください。（例：12:00）' }]);
     return;
   }
-  await saveClubSession(userId, CLUB_STATE.REQ_LOCATION, { ...session.tempData, endTime: text });
-  await clubClient.replyMessage(replyToken, [{
-    type: 'text', text: `${session.tempData.startTime}〜${text}\n\nコーチ指導の練習場所を入力してください。\n（登録した練習場所と異なる場合も入力してください）`,
-  }]);
+  const d = session.tempData;
+  const currentDay = d.days[d.currentDayIdx];
+  const newSlots = { ...d.slots, [currentDay]: { start: d.currentStart, end: text } };
+  const nextIdx = d.currentDayIdx + 1;
+
+  if (nextIdx >= d.days.length) {
+    // 全曜日完了 → 場所入力へ
+    await saveClubSession(userId, CLUB_STATE.REQ_LOCATION, { ...d, slots: newSlots });
+    await clubClient.replyMessage(replyToken, [{
+      type: 'text',
+      text: `【${currentDay}曜日】${d.currentStart}〜${text} ✅\n\nコーチ指導の練習場所を入力してください。\n（登録した練習場所と異なる場合も入力してください）`,
+    }]);
+  } else {
+    // 次の曜日へ
+    const nextDay = d.days[nextIdx];
+    await saveClubSession(userId, CLUB_STATE.REQ_SLOT_START, { ...d, slots: newSlots, currentDayIdx: nextIdx, currentStart: '' });
+    await clubClient.replyMessage(replyToken, [{
+      type: 'text',
+      text: `【${currentDay}曜日】${d.currentStart}〜${text} ✅\n\n【${nextDay}曜日】\n開始時間を入力してください。（例：14:00）`,
+    }]);
+  }
 }
 
 // ── 要請場所 ──
@@ -215,9 +233,10 @@ async function handleReqLocation(userId, message, replyToken, session) {
   if (!location) { await clubClient.replyMessage(replyToken, [{type:'text',text:'練習場所を入力してください。'}]); return; }
   const d = { ...session.tempData, reqLocation: location };
   await saveClubSession(userId, CLUB_STATE.REQ_CONFIRM, d);
+  const scheduleText = d.days.map(day => `${day}曜日：${d.slots[day].start}〜${d.slots[day].end}`).join('\n');
   await clubClient.replyMessage(replyToken, [{
     type: 'text',
-    text: `【要請内容の確認】\n\n曜日：${d.days.join('・')}\n時間：${d.startTime}〜${d.endTime}\n場所：${location}\nスポーツ：${d.sport}\n\nこの内容で要請しますか？`,
+    text: `【要請内容の確認】\n\nスポーツ：${d.sport}\n\n📅 スケジュール（毎週）\n${scheduleText}\n\n📍 場所：${location}\n\nこの内容で要請しますか？`,
     quickReply: qr([['要請する', '要請する'], ['キャンセル', 'キャンセル']]),
   }]);
 }
@@ -235,13 +254,17 @@ async function handleReqConfirm(userId, message, replyToken, session) {
     return;
   }
   const d = session.tempData;
+  // スケジュールをテキストとJSONで保存
+  const scheduleText = d.days.map(day => `${day} ${d.slots[day].start}〜${d.slots[day].end}`).join('・');
+  const firstSlot = d.slots[d.days[0]];
   const result = await saveRequest(userId, {
-    sport:       d.sport,
-    clubName:    d.clubName,
-    days:        d.days.join('・'),
-    startTime:   d.startTime,
-    endTime:     d.endTime,
-    reqLocation: d.reqLocation,
+    sport:        d.sport,
+    clubName:     d.clubName,
+    days:         scheduleText,
+    startTime:    firstSlot.start,
+    endTime:      firstSlot.end,
+    reqLocation:  d.reqLocation,
+    slotsJson:    JSON.stringify(d.slots),
   });
   await saveClubSession(userId, CLUB_STATE.REGISTERED, {});
   await notifyClubAdmin(userId, result.requestId, d);
@@ -256,10 +279,11 @@ async function notifyClubAdmin(clubUserId, requestId, d) {
   const adminId = config.clubAdminUserId;
   if (!adminId) return;
   const { clubClient: cc } = require('./clubClient');
+  const scheduleText = d.days.map(day => `${day}曜日 ${d.slots[day].start}〜${d.slots[day].end}`).join('\n');
   await cc.pushMessage(adminId, [
     {
       type: 'text',
-      text: `📋 新しいコーチ要請\n\n要請番号：${requestId}\n団体名：${d.clubName}\nスポーツ：${d.sport}\n曜日：${d.days.join('・')}\n時間：${d.startTime}〜${d.endTime}\n場所：${d.reqLocation}`,
+      text: `📋 新しいコーチ要請\n\n要請番号：${requestId}\n団体名：${d.clubName}\nスポーツ：${d.sport}\n\n📅 スケジュール（毎週）\n${scheduleText}\n\n📍 場所：${d.reqLocation}`,
     },
     {
       type: 'flex',
@@ -485,8 +509,8 @@ module.exports = {
   handleClubConfirm,
   startRequest,
   handleReqDays,
-  handleReqStart,
-  handleReqEnd,
+  handleReqSlotStart,
+  handleReqSlotEnd,
   handleReqLocation,
   handleReqConfirm,
   handleClubInquiry,

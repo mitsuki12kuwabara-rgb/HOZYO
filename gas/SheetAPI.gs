@@ -92,8 +92,8 @@ function setup() {
 
   var requests = ss.getSheetByName(SHEET.REQUESTS) || ss.insertSheet(SHEET.REQUESTS);
   if (requests.getLastRow() === 0) {
-    requests.appendRow(['要請ID','クラブUserID','スポーツ','部活名','曜日','開始時間','終了時間','練習場所','ステータス','マッチコーチUserID','作成日時']);
-    requests.getRange(1,1,1,11).setFontWeight('bold').setBackground('#f6b26b').setFontColor('#ffffff');
+    requests.appendRow(['要請ID','クラブUserID','スポーツ','部活名','スケジュール','代表開始時間','代表終了時間','練習場所','ステータス','マッチコーチUserID','作成日時','スケジュールJSON']);
+    requests.getRange(1,1,1,12).setFontWeight('bold').setBackground('#f6b26b').setFontColor('#ffffff');
   }
 
   var feedback = ss.getSheetByName('フィードバック') || ss.insertSheet('フィードバック');
@@ -354,7 +354,7 @@ function nextRequestId() {
 function saveRequest(clubUserId, data) {
   var sheet     = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.REQUESTS);
   var requestId = nextRequestId();
-  sheet.appendRow([requestId, clubUserId, data.sport, data.clubName, data.days, data.startTime, data.endTime, data.reqLocation, 'PENDING', '', new Date().toISOString()]);
+  sheet.appendRow([requestId, clubUserId, data.sport, data.clubName, data.days, data.startTime, data.endTime, data.reqLocation, 'PENDING', '', new Date().toISOString(), data.slotsJson || '']);
   return requestId;
 }
 
