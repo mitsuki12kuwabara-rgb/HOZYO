@@ -307,13 +307,17 @@ async function startAbsenceReport(userId, replyToken) {
     return;
   }
   const sessionList = requests.map((r, i) =>
-    `${i + 1}. ${r.clubName}\n   ${r.sport} ${r.days} ${r.startTime}〜${r.endTime}`
+    `${i + 1}. ${r.clubName}\n   ${r.sport} / ${r.days} / ${r.startTime}〜${r.endTime}`
   ).join('\n\n');
   await saveSession(userId, STATE.REPORT_SESSION, { absenceRequests: requests });
+  const qrItems = requests.slice(0, 12).map((r, i) => {
+    const label = `${i + 1}. ${r.days} ${r.startTime}〜${r.endTime}`.slice(0, 20);
+    return [label, String(i + 1)];
+  });
   await client.replyMessage(replyToken, [{
     type: 'text',
     text: `都合が悪いセッションを選んでください：\n\n${sessionList}`,
-    quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.clubName}`, String(i + 1)])),
+    quickReply: qr(qrItems),
   }]);
 }
 
