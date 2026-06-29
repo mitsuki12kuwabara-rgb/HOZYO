@@ -65,8 +65,8 @@ function setup() {
 
   var users = ss.getSheetByName(SHEET.USERS) || ss.insertSheet(SHEET.USERS);
   if (users.getLastRow() === 0) {
-    users.appendRow(['LINE UserID','名前','年齢','スポーツ','学生証MsgID','大会名','証明MsgID','登録日時','ステータス','承認日時','登録番号','シフトJSON']);
-    users.getRange(1,1,1,12).setFontWeight('bold').setBackground('#4a86e8').setFontColor('#ffffff');
+    users.appendRow(['LINE UserID','名前','年齢','スポーツ','学生証MsgID','資格種別','大会名','証明MsgID','登録日時','ステータス','承認日時','登録番号','シフトJSON','身長体重','競技歴']);
+    users.getRange(1,1,1,15).setFontWeight('bold').setBackground('#4a86e8').setFontColor('#ffffff');
   }
 
   var sess = ss.getSheetByName(SHEET.SESSIONS) || ss.insertSheet(SHEET.SESSIONS);
@@ -143,8 +143,8 @@ function saveUser(userId, data) {
   var regNo = nextRegNo();
   sheet.appendRow([
     userId, data.name, data.age, data.sport,
-    data.studentIdMsgId || '', data.tournamentName, data.proofMsgId || '',
-    new Date().toISOString(), 'PENDING', '', regNo,
+    data.studentIdMsgId || '', data.qualType || '', data.tournamentName, data.proofMsgId || '',
+    new Date().toISOString(), 'PENDING', '', regNo, '', data.heightWeight || '', data.career || '',
   ]);
   return regNo;
 }
@@ -156,9 +156,9 @@ function getUser(userId) {
     if (rows[i][0] === userId) {
       return {
         userId: rows[i][0], name: rows[i][1], age: rows[i][2], sport: rows[i][3],
-        studentIdMsgId: rows[i][4], tournamentName: rows[i][5], proofMsgId: rows[i][6],
-        registeredAt: rows[i][7], status: rows[i][8], approvedAt: rows[i][9], regNo: rows[i][10],
-        shifts: rows[i][11] || '',
+        studentIdMsgId: rows[i][4], qualType: rows[i][5], tournamentName: rows[i][6], proofMsgId: rows[i][7],
+        registeredAt: rows[i][8], status: rows[i][9], approvedAt: rows[i][10], regNo: rows[i][11],
+        shifts: rows[i][12] || '', heightWeight: rows[i][13] || '', career: rows[i][14] || '',
       };
     }
   }
@@ -171,7 +171,7 @@ function saveShifts(userId, shifts) {
   var json  = JSON.stringify(shifts || {});
   for (var i = 1; i < rows.length; i++) {
     if (rows[i][0] === userId) {
-      sheet.getRange(i+1, 12).setValue(json);
+      sheet.getRange(i+1, 13).setValue(json); // col 13 = シフトJSON
       return;
     }
   }
@@ -210,8 +210,8 @@ function updateStatus(userId, status, approvedAt) {
   var rows  = sheet.getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) {
     if (rows[i][0] === userId) {
-      sheet.getRange(i+1,9).setValue(status);
-      if (approvedAt) sheet.getRange(i+1,10).setValue(approvedAt);
+      sheet.getRange(i+1,10).setValue(status);    // col 10 = ステータス
+      if (approvedAt) sheet.getRange(i+1,11).setValue(approvedAt); // col 11 = 承認日時
       return;
     }
   }

@@ -96,30 +96,107 @@ async function handleSport(userId, message, replyToken, session) {
     }]);
     return;
   }
-  await saveSession(userId, STATE.STUDENT_ID, { ...session.tempData, sport: message.text });
+  await saveSession(userId, STATE.HEIGHT_WEIGHT, { ...session.tempData, sport: message.text });
   await client.replyMessage(replyToken, [{
     type: 'text',
-    text: '④ 学生証の写真を送ってください📸\n\n氏名・大学名・学年が確認できる面を撮影してください。',
+    text: '④ 身長・体重を入力してください。\n現役時との変化も記載してください。\n\n例：175cm・68kg（現役時65kg、+3kg）',
   }]);
 }
 
-// ── ④ 学生証写真 ──
+// ── ④ 身長・体重 ──
+async function handleHeightWeight(userId, message, replyToken, session) {
+  if (message.type !== 'text' || !message.text.trim()) {
+    await client.replyMessage(replyToken, [{ type: 'text', text: '身長・体重を入力してください。（例：175cm・68kg）' }]);
+    return;
+  }
+  await saveSession(userId, STATE.PLAYING, { ...session.tempData, heightWeight: message.text.trim() });
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: '⑤ 現在も何らかの形でプレーを継続していますか？\n\n（登録条件：現役でのプレー継続が必須です）',
+    quickReply: qr([['はい', 'はい'], ['いいえ', 'いいえ']]),
+  }]);
+}
+
+// ── ⑤ 現役継続確認 ──
+async function handlePlaying(userId, message, replyToken, session) {
+  const text = message.text?.trim();
+  if (text === 'いいえ') {
+    await deleteSession(userId);
+    await client.replyMessage(replyToken, [{
+      type: 'text',
+      text: '申し訳ありません。\n\n本サービスのコーチ登録は「現在も何らかの形でプレーを継続中」であることが条件です。\n\nプレー再開後に改めてご応募ください。',
+    }]);
+    return;
+  }
+  if (text !== 'はい') {
+    await client.replyMessage(replyToken, [{
+      type: 'text', text: '「はい」または「いいえ」を選択してください。',
+      quickReply: qr([['はい', 'はい'], ['いいえ', 'いいえ']]),
+    }]);
+    return;
+  }
+  await saveSession(userId, STATE.CAREER, { ...session.tempData, playing: true });
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: '⑥ 競技歴とポジション歴を入力してください。\n\n例：高校3年間・大学3年間サッカー部。ポジション：FW（ストライカー）。全国選手権出場2回。',
+  }]);
+}
+
+// ── ⑥ 競技歴・ポジション ──
+async function handleCareer(userId, message, replyToken, session) {
+  if (message.type !== 'text' || !message.text.trim()) {
+    await client.replyMessage(replyToken, [{ type: 'text', text: '競技歴・ポジション歴を入力してください。' }]);
+    return;
+  }
+  await saveSession(userId, STATE.STUDENT_ID, { ...session.tempData, career: message.text.trim() });
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: '⑦ 学生証の写真を送ってください📸\n\n氏名・大学名・学年が確認できる面を撮影してください。',
+  }]);
+}
+
+// ── ⑦ 学生証写真 ──
 async function handleStudentId(userId, message, replyToken, session) {
   if (message.type !== 'image') {
     await client.replyMessage(replyToken, [{ type: 'text', text: '学生証の写真（画像）を送ってください。' }]);
     return;
   }
-  // メッセージIDを保存（後で管理者が画像確認URLから閲覧）
-  await saveSession(userId, STATE.TOURNAMENT_NAME, {
+  await saveSession(userId, STATE.QUAL_TYPE, {
     ...session.tempData, studentIdMsgId: message.id,
   });
   await client.replyMessage(replyToken, [{
     type: 'text',
-    text: '✅ 学生証を受け取りました！\n\n⑤ 出場した全国大会の名前を入力してください。\n例：全国高校バスケットボール選手権大会（ウインターカップ）',
+    text: '✅ 学生証を受け取りました！\n\n⑧ 資格の種類を選択してください。',
+    quickReply: qr([
+      ['全国大会出場', '全国大会出場'],
+      ['エリア別大会ベスト4以上', 'エリア別大会ベスト4以上'],
+    ]),
   }]);
 }
 
-// ── ⑤ 大会名 ──
+// ── ⑧ 資格種別 ──
+const QUAL_TYPES = ['全国大会出場', 'エリア別大会ベスト4以上'];
+async function handleQualType(userId, message, replyToken, session) {
+  if (message.type !== 'text' || !QUAL_TYPES.includes(message.text?.trim())) {
+    await client.replyMessage(replyToken, [{
+      type: 'text', text: '資格の種類を選択してください。',
+      quickReply: qr(QUAL_TYPES.map(q => [q])),
+    }]);
+    return;
+  }
+  await saveSession(userId, STATE.TOURNAMENT_NAME, {
+    ...session.tempData, qualType: message.text.trim(),
+  });
+  const hint = message.text.trim() === 'エリア別大会ベスト4以上'
+    ? '例：関東高校バスケ選手権 ベスト4'
+    : '例：全国高校バスケットボール選手権大会（ウインターカップ）';
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: `⑨ 大会名を入力してください。\n${hint}`,
+  }]);
+}
+
+// ── ⑨ 大会名 ──
 async function handleTournamentName(userId, message, replyToken, session) {
   if (message.type !== 'text' || !message.text.trim()) {
     await client.replyMessage(replyToken, [{ type: 'text', text: '大会名をテキストで入力してください。' }]);
@@ -130,7 +207,7 @@ async function handleTournamentName(userId, message, replyToken, session) {
   });
   await client.replyMessage(replyToken, [{
     type: 'text',
-    text: '⑥ 出場を証明できる資料を送ってください📋\n\n' +
+    text: '⑩ 出場を証明できる資料を送ってください📋\n\n' +
           '・試合のメンバー表の写真（名前が確認できるもの）\n' +
           '・名前が記載されたネット上のURL\n\n' +
           '写真または URL（テキスト）で送信してください。',
@@ -161,10 +238,13 @@ async function showConfirmation(replyToken, data) {
   await client.replyMessage(replyToken, [{
     type: 'text',
     text: '📋 登録内容の確認\n\n' +
-          `▶ 名前　　：${data.name}\n` +
-          `▶ 年齢　　：${data.age}歳\n` +
-          `▶ スポーツ：${data.sport}\n` +
-          `▶ 大会名　：${data.tournamentName}\n\n` +
+          `▶ 名前　　　：${data.name}\n` +
+          `▶ 年齢　　　：${data.age}歳\n` +
+          `▶ スポーツ　：${data.sport}\n` +
+          `▶ 身長・体重：${data.heightWeight}\n` +
+          `▶ 競技歴　　：${data.career}\n` +
+          `▶ 資格種別　：${data.qualType}\n` +
+          `▶ 大会名　　：${data.tournamentName}\n\n` +
           'この内容で申請しますか？',
     quickReply: qr([['✅ 申請する', '申請する'], ['🔄 やり直す', 'やり直す']]),
   }]);
@@ -472,10 +552,13 @@ async function notifyAdmin(userId, data, regNo) {
       body: {
         type: 'box', layout: 'vertical', paddingAll: '16px',
         contents: [
-          row('名前',     data.name),
-          row('年齢',     `${data.age}歳`),
-          row('スポーツ', data.sport),
-          row('大会名',   data.tournamentName),
+          row('名前',       data.name),
+          row('年齢',       `${data.age}歳`),
+          row('スポーツ',   data.sport),
+          row('身長・体重', data.heightWeight || ''),
+          row('競技歴',     data.career || ''),
+          row('資格種別',   data.qualType || ''),
+          row('大会名',     data.tournamentName),
           ...(data.shifts ? [
             { type: 'separator', margin: 'lg' },
             { type: 'text', text: '📅 シフト', weight: 'bold', size: 'sm', margin: 'md' },
@@ -490,10 +573,10 @@ async function notifyAdmin(userId, data, regNo) {
         type: 'box', layout: 'horizontal', spacing: 'sm', paddingAll: '12px',
         contents: [
           {
-            type: 'button', style: 'primary', color: '#1DB446', flex: 1,
+            type: 'button', style: 'primary', color: '#0077b6', flex: 1,
             action: {
-              type: 'postback', label: '✅ 承認する',
-              data: `action=approve&userId=${userId}&regNo=${encodeURIComponent(regNo)}&name=${encodeURIComponent(data.name)}`,
+              type: 'postback', label: '🎤 面接を依頼',
+              data: `action=interview&userId=${userId}&regNo=${encodeURIComponent(regNo)}&name=${encodeURIComponent(data.name)}`,
             },
           },
           {
@@ -649,7 +732,8 @@ async function handleMatchingCheck(userId, replyToken) {
 module.exports = {
   handleFollow, startRegistration,
   handleName, handleAge, handleSport,
-  handleStudentId, handleTournamentName, handleTournamentProof,
+  handleHeightWeight, handlePlaying, handleCareer,
+  handleStudentId, handleQualType, handleTournamentName, handleTournamentProof,
   handleConfirmInput, handleMatchingCheck, handleInquiry, handleDetails,
   handleShiftDays, handleShiftSlot, handleShiftConfirm,
   startAbsenceReport, handleReportSession, handleReportDate,

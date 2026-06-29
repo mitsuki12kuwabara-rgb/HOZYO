@@ -19,8 +19,60 @@ async function handlePostback(userId, data, replyToken) {
     return;
   }
   const p = parsePostback(data);
-  if (p.action === 'approve') await approveUser(p, replyToken);
-  if (p.action === 'reject')  await rejectUser(p, replyToken);
+  if (p.action === 'interview') await requestInterview(p, replyToken);
+  if (p.action === 'approve')   await approveUser(p, replyToken);
+  if (p.action === 'reject')    await rejectUser(p, replyToken);
+}
+
+async function requestInterview({ userId, regNo, name }, adminReplyToken) {
+  try {
+    // コーチへ面接依頼を通知
+    await client.pushMessage(userId, [{
+      type: 'text',
+      text: `${name} さん、書類審査を通過しました🎉\n\nオンライン面接のご案内をお送りします。\n担当者から直接このLINEにてご連絡しますので、しばらくお待ちください。`,
+    }]);
+    // 管理者へ承認/却下の第2カードを送信
+    await client.replyMessage(adminReplyToken, [{
+      type: 'flex',
+      altText: `【面接後】${name} さんの最終審査`,
+      contents: {
+        type: 'bubble',
+        header: {
+          type: 'box', layout: 'vertical', backgroundColor: '#0077b6',
+          contents: [{ type: 'text', text: `🎤 面接実施済み：${name}`, weight: 'bold', size: 'md', color: '#ffffff', wrap: true }],
+        },
+        body: {
+          type: 'box', layout: 'vertical', spacing: 'sm',
+          contents: [
+            { type: 'text', text: '面接を踏まえて最終判断してください。', wrap: true, size: 'sm', color: '#333333' },
+            { type: 'text', text: `登録番号: ${regNo}`, size: 'xs', color: '#aaaaaa', margin: 'md' },
+          ],
+        },
+        footer: {
+          type: 'box', layout: 'horizontal', spacing: 'sm', paddingAll: '12px',
+          contents: [
+            {
+              type: 'button', style: 'primary', color: '#1DB446', flex: 1,
+              action: {
+                type: 'postback', label: '✅ 承認する',
+                data: `action=approve&userId=${userId}&regNo=${encodeURIComponent(regNo)}&name=${encodeURIComponent(name)}`,
+              },
+            },
+            {
+              type: 'button', style: 'secondary', flex: 1,
+              action: {
+                type: 'postback', label: '❌ 却下する',
+                data: `action=reject&userId=${userId}&name=${encodeURIComponent(name)}`,
+              },
+            },
+          ],
+        },
+      },
+    }]);
+  } catch (err) {
+    console.error('requestInterview error:', err);
+    await client.replyMessage(adminReplyToken, [{ type: 'text', text: `エラー：${err.message}` }]);
+  }
 }
 
 async function approveUser({ userId, regNo, name }, adminReplyToken) {

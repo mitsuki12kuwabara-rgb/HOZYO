@@ -5,7 +5,8 @@ const { getSession }                         = require('./gasClient');
 const {
   handleFollow, startRegistration,
   handleName, handleAge, handleSport,
-  handleStudentId, handleTournamentName, handleTournamentProof,
+  handleHeightWeight, handlePlaying, handleCareer,
+  handleStudentId, handleQualType, handleTournamentName, handleTournamentProof,
   handleConfirmInput, handleMatchingCheck, handleInquiry, handleDetails,
   handleShiftDays, handleShiftSlot, handleShiftConfirm,
   startAbsenceReport, handleReportSession, handleReportDate,
@@ -96,7 +97,11 @@ async function handleEvent(event) {
     [STATE.NAME]:             handleName,
     [STATE.AGE]:              handleAge,
     [STATE.SPORT]:            handleSport,
+    [STATE.HEIGHT_WEIGHT]:    handleHeightWeight,
+    [STATE.PLAYING]:          handlePlaying,
+    [STATE.CAREER]:           handleCareer,
     [STATE.STUDENT_ID]:       handleStudentId,
+    [STATE.QUAL_TYPE]:        handleQualType,
     [STATE.TOURNAMENT_NAME]:  handleTournamentName,
     [STATE.TOURNAMENT_PROOF]: handleTournamentProof,
     [STATE.CONFIRM]:          handleConfirmInput,
@@ -123,10 +128,9 @@ async function handleEvent(event) {
 // ── クラブ Webhook ──
 app.post('/webhook-club', clubMiddleware, (req, res) => {
   res.json({ status: 'ok' });
-  (req.body.events || []).forEach(event => {
-    console.log('CLUB USER ID:', event.source?.userId, '| type:', event.type);
-    handleClubEvent(event).catch(err => console.error('Club event error:', err));
-  });
+  (req.body.events || []).forEach(event =>
+    handleClubEvent(event).catch(err => console.error('Club event error:', err))
+  );
 });
 
 async function handleClubEvent(event) {
@@ -144,7 +148,6 @@ async function handleClubEvent(event) {
   }
 
   const session = await getClubSession(userId);
-  console.log('CLUB SESSION:', JSON.stringify(session));
   const state   = session?.state || CLUB_STATE.NONE;
 
   const handlers = {
