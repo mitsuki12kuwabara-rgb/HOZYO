@@ -11,7 +11,7 @@ const {
   handleShiftDays, handleShiftSlot, handleShiftConfirm,
   startAbsenceReport, handleReportSession, handleReportDate,
   handleReportReason, handleReportConfirm,
-  startFeedback, handleFbRating, handleFbComment,
+  startFeedback, handleFbSession, handleFbRating, handleFbComment,
 } = require('./flow');
 const { handlePostback }    = require('./admin');
 const { resendCertificate } = require('./certificate');
@@ -88,7 +88,8 @@ async function handleEvent(event) {
     if (t === 'マッチング確認')       { await handleMatchingCheck(userId, event.replyToken); return; }
     if (t === 'お問い合わせ' || t === '問い合わせ') { await handleInquiry(userId, event.replyToken); return; }
     if (t === '都合が悪い日を報告')   { await startAbsenceReport(userId, event.replyToken); return; }
-    if (t === 'フィードバックを送る') { await startFeedback(userId, event.replyToken); return; }
+    if (t === 'フィードバックを送る') { await startFeedback(userId, event.replyToken, false); return; }
+    if (t === 'フィードバックテスト') { await startFeedback(userId, event.replyToken, true); return; }
   }
 
   // 登録フロー
@@ -114,6 +115,7 @@ async function handleEvent(event) {
     [STATE.REPORT_DATE]:      handleReportDate,
     [STATE.REPORT_REASON]:    handleReportReason,
     [STATE.REPORT_CONFIRM]:   handleReportConfirm,
+    [STATE.FB_SESSION]:       handleFbSession,
     [STATE.FB_RATING]:        handleFbRating,
     [STATE.FB_COMMENT]:       handleFbComment,
   };

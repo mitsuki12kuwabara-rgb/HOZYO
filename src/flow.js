@@ -723,16 +723,79 @@ async function handleInquiry(userId, replyToken) {
 }
 
 // ── フィードバック：開始 ──
-async function startFeedback(userId, replyToken) {
+async function startFeedback(userId, replyToken, testMode = false) {
   const user = await getUser(userId);
   if (!user || user.status !== STATE.APPROVED) {
     await client.replyMessage(replyToken, [{ type: 'text', text: 'フィードバックはコーチ承認後に送ることができます。' }]);
     return;
   }
-  await saveSession(userId, STATE.FB_RATING, { fbCoachName: user.name });
+
+  if (!testMode) {
+    const requests = await getRequestsByCoach(userId);
+    if (!requests || requests.length === 0) {
+      await client.replyMessage(replyToken, [{
+        type: 'text',
+        text: '現在マッチング中のセッションがないため、フィードバックを送ることができません。',
+      }]);
+      return;
+    }
+
+    if (requests.length === 1) {
+      // 1件のみなら自動選択
+      const r = requests[0];
+      await saveSession(userId, STATE.FB_RATING, {
+        fbCoachName: user.name,
+        fbRequest: { requestId: r.requestId, clubName: r.clubName, sport: r.sport, days: r.days, startTime: r.startTime, endTime: r.endTime },
+      });
+      await client.replyMessage(replyToken, [{
+        type: 'text',
+        text: `⭐ フィードバック送信\n\nセッション：${r.clubName}（${r.days} ${r.startTime}〜${r.endTime}）\n\n今回の指導を5段階で評価してください。`,
+        quickReply: qr([['⭐ 1', '1'], ['⭐⭐ 2', '2'], ['⭐⭐⭐ 3', '3'], ['⭐⭐⭐⭐ 4', '4'], ['⭐⭐⭐⭐⭐ 5', '5']]),
+      }]);
+      return;
+    }
+
+    // 複数ある場合はセッション選択
+    const sessionList = requests.map((r, i) =>
+      `${i + 1}. ${r.clubName}（${r.days} ${r.startTime}〜${r.endTime}）`
+    ).join('\n');
+    await saveSession(userId, STATE.FB_SESSION, { fbCoachName: user.name, fbRequests: requests });
+    await client.replyMessage(replyToken, [{
+      type: 'text',
+      text: `フィードバックを送るセッションを選んでください：\n\n${sessionList}`,
+      quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.clubName}`, String(i + 1)])),
+    }]);
+    return;
+  }
+
+  // テストモード：マッチングなしで送信可能
+  await saveSession(userId, STATE.FB_RATING, { fbCoachName: user.name, fbRequest: null, fbTestMode: true });
   await client.replyMessage(replyToken, [{
     type: 'text',
-    text: '⭐ フィードバック送信\n\n今回の指導セッションを5段階で評価してください。',
+    text: '⭐ フィードバック送信（テストモード）\n\n今回の指導セッションを5段階で評価してください。',
+    quickReply: qr([['⭐ 1', '1'], ['⭐⭐ 2', '2'], ['⭐⭐⭐ 3', '3'], ['⭐⭐⭐⭐ 4', '4'], ['⭐⭐⭐⭐⭐ 5', '5']]),
+  }]);
+}
+
+// ── フィードバック：セッション選択 ──
+async function handleFbSession(userId, message, replyToken, session) {
+  const idx = parseInt(message.text?.trim(), 10) - 1;
+  const requests = session.tempData.fbRequests || [];
+  if (isNaN(idx) || idx < 0 || idx >= requests.length) {
+    await client.replyMessage(replyToken, [{
+      type: 'text', text: '番号をボタンから選んでください。',
+      quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.clubName}`, String(i + 1)])),
+    }]);
+    return;
+  }
+  const r = requests[idx];
+  await saveSession(userId, STATE.FB_RATING, {
+    ...session.tempData,
+    fbRequest: { requestId: r.requestId, clubName: r.clubName, sport: r.sport, days: r.days, startTime: r.startTime, endTime: r.endTime },
+  });
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: `⭐ フィードバック送信\n\nセッション：${r.clubName}（${r.days} ${r.startTime}〜${r.endTime}）\n\n今回の指導を5段階で評価してください。`,
     quickReply: qr([['⭐ 1', '1'], ['⭐⭐ 2', '2'], ['⭐⭐⭐ 3', '3'], ['⭐⭐⭐⭐ 4', '4'], ['⭐⭐⭐⭐⭐ 5', '5']]),
   }]);
 }
@@ -759,26 +822,38 @@ async function handleFbComment(userId, message, replyToken, session) {
   const comment = message.text?.trim() === 'スキップ' ? '' : message.text?.trim();
   const d = session.tempData;
 
-  await saveFeedback(userId, { coachName: d.fbCoachName, rating: d.fbRating, comment });
+  const r = d.fbRequest;
+  await saveFeedback(userId, {
+    coachName: d.fbCoachName, rating: d.fbRating, comment,
+    clubName: r?.clubName || '', requestId: r?.requestId || '',
+    testMode: d.fbTestMode || false,
+  });
 
   // 管理者通知
+  const bodyRows = [
+    row('コーチ名', d.fbCoachName),
+    ...(r ? [
+      row('クラブ名', r.clubName),
+      row('スポーツ', r.sport),
+      row('曜日・時間', `${r.days} ${r.startTime}〜${r.endTime}`),
+    ] : [row('クラブ', '（テストモード・未選択）')]),
+    row('評価', '⭐'.repeat(d.fbRating) + `（${d.fbRating}/5）`),
+    row('コメント', comment || '（なし）'),
+    { type: 'text', text: `LINE ID: ${userId}`, size: 'xxs', color: '#aaaaaa', margin: 'md', wrap: true },
+  ];
+
   await client.pushMessage(adminUserId, [{
     type: 'flex', altText: `【フィードバック】${d.fbCoachName} コーチ`,
     contents: {
       type: 'bubble',
       header: {
         type: 'box', layout: 'vertical', backgroundColor: '#f4a261',
-        contents: [{ type: 'text', text: '📝 フィードバック受信', weight: 'bold', size: 'lg', color: '#ffffff' }],
-      },
-      body: {
-        type: 'box', layout: 'vertical', spacing: 'sm',
         contents: [
-          row('コーチ名', d.fbCoachName),
-          row('評価', '⭐'.repeat(d.fbRating) + `（${d.fbRating}/5）`),
-          row('コメント', comment || '（なし）'),
-          { type: 'text', text: `送信者LINE ID: ${userId}`, size: 'xxs', color: '#aaaaaa', margin: 'md', wrap: true },
+          { type: 'text', text: '📝 フィードバック受信', weight: 'bold', size: 'lg', color: '#ffffff' },
+          ...(d.fbTestMode ? [{ type: 'text', text: '※テストモード', size: 'xs', color: '#fff3e0' }] : []),
         ],
       },
+      body: { type: 'box', layout: 'vertical', spacing: 'sm', contents: bodyRows },
     },
   }]);
 
@@ -806,5 +881,5 @@ module.exports = {
   handleShiftDays, handleShiftSlot, handleShiftConfirm,
   startAbsenceReport, handleReportSession, handleReportDate,
   handleReportReason, handleReportConfirm,
-  startFeedback, handleFbRating, handleFbComment,
+  startFeedback, handleFbSession, handleFbRating, handleFbComment,
 };

@@ -96,8 +96,8 @@ function setup() {
 
   var feedback = ss.getSheetByName('フィードバック') || ss.insertSheet('フィードバック');
   if (feedback.getLastRow() === 0) {
-    feedback.appendRow(['送信日時','コーチUserID','コーチ名','評価（5段階）','コメント']);
-    feedback.getRange(1,1,1,5).setFontWeight('bold').setBackground('#f4a261').setFontColor('#ffffff');
+    feedback.appendRow(['送信日時','コーチUserID','コーチ名','クラブ名','要請ID','評価（5段階）','コメント','テストモード']);
+    feedback.getRange(1,1,1,8).setFontWeight('bold').setBackground('#f4a261').setFontColor('#ffffff');
   }
 
   return { ok: true };
@@ -217,10 +217,14 @@ function saveFeedback(userId, data) {
   var sheet = ss.getSheetByName('フィードバック');
   if (!sheet) {
     sheet = ss.insertSheet('フィードバック');
-    sheet.appendRow(['送信日時','コーチUserID','コーチ名','評価（5段階）','コメント']);
-    sheet.getRange(1,1,1,5).setFontWeight('bold').setBackground('#f4a261').setFontColor('#ffffff');
+    sheet.appendRow(['送信日時','コーチUserID','コーチ名','クラブ名','要請ID','評価（5段階）','コメント','テストモード']);
+    sheet.getRange(1,1,1,8).setFontWeight('bold').setBackground('#f4a261').setFontColor('#ffffff');
   }
-  sheet.appendRow([new Date().toISOString(), userId, data.coachName || '', data.rating, data.comment || '']);
+  sheet.appendRow([
+    new Date().toISOString(), userId, data.coachName || '',
+    data.clubName || '', data.requestId || '',
+    data.rating, data.comment || '', data.testMode ? 'YES' : '',
+  ]);
   return { ok: true };
 }
 
