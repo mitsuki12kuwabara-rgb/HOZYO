@@ -35,6 +35,7 @@ function doPost(e) {
       case 'saveShifts':        saveShifts(body.userId, body.shifts); return res({ ok: true });
       case 'getRequestsByCoach': return res(getRequestsByCoach(body.coachUserId));
       case 'saveAbsenceReport': return res(saveAbsenceReport(body.userId, body.data));
+      case 'saveFeedback':      return res(saveFeedback(body.userId, body.data));
       // クラブ側
       case 'getClubSession':    return res(getClubSession(body.userId));
       case 'saveClubSession':   saveClubSession(body.userId, body.state, body.tempData); return res({ ok: true });
@@ -91,6 +92,12 @@ function setup() {
   if (requests.getLastRow() === 0) {
     requests.appendRow(['要請ID','クラブUserID','スポーツ','部活名','曜日','開始時間','終了時間','練習場所','ステータス','マッチコーチUserID','作成日時']);
     requests.getRange(1,1,1,11).setFontWeight('bold').setBackground('#f6b26b').setFontColor('#ffffff');
+  }
+
+  var feedback = ss.getSheetByName('フィードバック') || ss.insertSheet('フィードバック');
+  if (feedback.getLastRow() === 0) {
+    feedback.appendRow(['送信日時','コーチUserID','コーチ名','評価（5段階）','コメント']);
+    feedback.getRange(1,1,1,5).setFontWeight('bold').setBackground('#f4a261').setFontColor('#ffffff');
   }
 
   return { ok: true };
@@ -202,6 +209,18 @@ function saveAbsenceReport(userId, data) {
     sheet.getRange(1,1,1,7).setFontWeight('bold').setBackground('#cc0000').setFontColor('#ffffff');
   }
   sheet.appendRow([new Date().toISOString(), userId, data.coachName, data.requestId, data.clubName, data.date, data.reason || '']);
+  return { ok: true };
+}
+
+function saveFeedback(userId, data) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('フィードバック');
+  if (!sheet) {
+    sheet = ss.insertSheet('フィードバック');
+    sheet.appendRow(['送信日時','コーチUserID','コーチ名','評価（5段階）','コメント']);
+    sheet.getRange(1,1,1,5).setFontWeight('bold').setBackground('#f4a261').setFontColor('#ffffff');
+  }
+  sheet.appendRow([new Date().toISOString(), userId, data.coachName || '', data.rating, data.comment || '']);
   return { ok: true };
 }
 

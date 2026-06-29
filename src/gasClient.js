@@ -23,6 +23,7 @@ module.exports = {
   saveShifts:         (userId, shifts)             => call('saveShifts',         { userId, shifts }),
   getRequestsByCoach: (coachUserId)                => call('getRequestsByCoach', { coachUserId }),
   saveAbsenceReport:  (userId, data)               => call('saveAbsenceReport',  { userId, data }),
+  saveFeedback:       (userId, data)               => call('saveFeedback',       { userId, data }),
   // クラブ側
   getClubSession:    (userId)                  => call('getClubSession',    { userId }),
   saveClubSession:   (userId, state, tempData) => call('saveClubSession',   { userId, state, tempData }),

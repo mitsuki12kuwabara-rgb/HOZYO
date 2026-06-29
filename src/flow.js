@@ -2,7 +2,8 @@ const lineClient                                       = require('./lineClient')
 const { client }                                       = lineClient;
 const { getSession, saveSession, deleteSession,
         saveUser, getUser, saveShifts,
-        getRequestsByCoach, saveAbsenceReport }        = require('./gasClient');
+        getRequestsByCoach, saveAbsenceReport,
+        saveFeedback }                                 = require('./gasClient');
 const { sendCertificate }                              = require('./certificate');
 const config                                           = require('./config');
 const { STATE, SPORTS, adminUserId, adminImageSecret, renderUrl } = config;
@@ -721,6 +722,73 @@ async function handleInquiry(userId, replyToken) {
   ]);
 }
 
+// ── フィードバック：開始 ──
+async function startFeedback(userId, replyToken) {
+  const user = await getUser(userId);
+  if (!user || user.status !== STATE.APPROVED) {
+    await client.replyMessage(replyToken, [{ type: 'text', text: 'フィードバックはコーチ承認後に送ることができます。' }]);
+    return;
+  }
+  await saveSession(userId, STATE.FB_RATING, { fbCoachName: user.name });
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: '⭐ フィードバック送信\n\n今回の指導セッションを5段階で評価してください。',
+    quickReply: qr([['⭐ 1', '1'], ['⭐⭐ 2', '2'], ['⭐⭐⭐ 3', '3'], ['⭐⭐⭐⭐ 4', '4'], ['⭐⭐⭐⭐⭐ 5', '5']]),
+  }]);
+}
+
+// ── フィードバック：評価 ──
+async function handleFbRating(userId, message, replyToken, session) {
+  const rating = parseInt(message.text?.trim(), 10);
+  if (isNaN(rating) || rating < 1 || rating > 5) {
+    await client.replyMessage(replyToken, [{
+      type: 'text', text: '1〜5の数字をボタンから選んでください。',
+      quickReply: qr([['⭐ 1', '1'], ['⭐⭐ 2', '2'], ['⭐⭐⭐ 3', '3'], ['⭐⭐⭐⭐ 4', '4'], ['⭐⭐⭐⭐⭐ 5', '5']]),
+    }]);
+    return;
+  }
+  await saveSession(userId, STATE.FB_COMMENT, { ...session.tempData, fbRating: rating });
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: `評価：${'⭐'.repeat(rating)}（${rating}）\n\nコメントがあれば入力してください。\n（スキップする場合は「スキップ」と送信）`,
+  }]);
+}
+
+// ── フィードバック：コメント ──
+async function handleFbComment(userId, message, replyToken, session) {
+  const comment = message.text?.trim() === 'スキップ' ? '' : message.text?.trim();
+  const d = session.tempData;
+
+  await saveFeedback(userId, { coachName: d.fbCoachName, rating: d.fbRating, comment });
+
+  // 管理者通知
+  await client.pushMessage(adminUserId, [{
+    type: 'flex', altText: `【フィードバック】${d.fbCoachName} コーチ`,
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: '#f4a261',
+        contents: [{ type: 'text', text: '📝 フィードバック受信', weight: 'bold', size: 'lg', color: '#ffffff' }],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm',
+        contents: [
+          row('コーチ名', d.fbCoachName),
+          row('評価', '⭐'.repeat(d.fbRating) + `（${d.fbRating}/5）`),
+          row('コメント', comment || '（なし）'),
+          { type: 'text', text: `送信者LINE ID: ${userId}`, size: 'xxs', color: '#aaaaaa', margin: 'md', wrap: true },
+        ],
+      },
+    },
+  }]);
+
+  await saveSession(userId, STATE.APPROVED, {});
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: `✅ フィードバックを送信しました。\n\n評価：${'⭐'.repeat(d.fbRating)}（${d.fbRating}/5）${comment ? `\nコメント：${comment}` : ''}\n\nありがとうございました！`,
+  }]);
+}
+
 // ── 登録済みメニュー ──
 async function handleMatchingCheck(userId, replyToken) {
   await client.replyMessage(replyToken, [{
@@ -738,4 +806,5 @@ module.exports = {
   handleShiftDays, handleShiftSlot, handleShiftConfirm,
   startAbsenceReport, handleReportSession, handleReportDate,
   handleReportReason, handleReportConfirm,
+  startFeedback, handleFbRating, handleFbComment,
 };
