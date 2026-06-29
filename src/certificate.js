@@ -57,18 +57,36 @@ function buildCertFlex(user) {
               certRow('スポーツ', user.sport),
             ],
           },
+          { type: 'separator', margin: 'xl' },
+          { type: 'text', text: '🏅 プロフィール', weight: 'bold', size: 'sm', margin: 'lg', color: '#444444' },
+          {
+            type: 'box', layout: 'vertical', margin: 'sm',
+            backgroundColor: '#f8f8f8', cornerRadius: '8px', paddingAll: '14px',
+            contents: [
+              ...(user.heightWeight ? [certRow('身長・体重', user.heightWeight)] : []),
+              ...(user.qualType     ? [certRow('資格種別',   user.qualType)]     : []),
+              ...(user.tournamentName ? [certRow('大会名',  user.tournamentName)] : []),
+            ],
+          },
+          ...(user.career ? [
+            { type: 'separator', margin: 'lg' },
+            { type: 'text', text: '📋 競技歴・ポジション', weight: 'bold', size: 'sm', margin: 'lg', color: '#444444' },
+            { type: 'text', text: user.career, size: 'sm', color: '#333333', wrap: true, margin: 'sm' },
+          ] : []),
           ...(user.shifts ? (() => {
-            const shifts = typeof user.shifts === 'string' ? JSON.parse(user.shifts) : user.shifts;
-            const entries = Object.entries(shifts);
-            if (entries.length === 0) return [];
-            return [
-              { type: 'separator', margin: 'xl' },
-              { type: 'text', text: '📅 対応シフト', weight: 'bold', size: 'sm', margin: 'lg', color: '#444444' },
-              ...entries.map(([day, slots]) => certRow(`${day}曜日`, slots.join('、'))),
-            ];
+            try {
+              const shifts = typeof user.shifts === 'string' ? JSON.parse(user.shifts) : user.shifts;
+              const entries = Object.entries(shifts);
+              if (entries.length === 0) return [];
+              return [
+                { type: 'separator', margin: 'xl' },
+                { type: 'text', text: '📅 対応シフト', weight: 'bold', size: 'sm', margin: 'lg', color: '#444444' },
+                ...entries.map(([day, slots]) => certRow(`${day}曜日`, slots.join('、'))),
+              ];
+            } catch { return []; }
           })() : []),
           { type: 'separator', margin: 'xl' },
-          { type: 'text', text: '全国大会出場経験 認定コーチ',
+          { type: 'text', text: user.qualType === 'エリア別大会ベスト4以上' ? 'エリア別大会ベスト4以上 認定コーチ' : '全国大会出場経験 認定コーチ',
             size: 'sm', color: '#888888', align: 'center', margin: 'lg' },
           { type: 'text', text: '※ スクリーンショットして保管してください',
             size: 'xxs', color: '#aaaaaa', align: 'center', margin: 'sm' },
