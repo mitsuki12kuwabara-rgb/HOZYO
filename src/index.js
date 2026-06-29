@@ -177,6 +177,10 @@ async function handleClubEvent(event) {
 
   if (handlers[state]) {
     await handlers[state](userId, event.message, event.replyToken, session);
+  } else if (state === CLUB_STATE.REGISTERED) {
+    await clubClient.replyMessage(event.replyToken, [{
+      type: 'text', text: 'メニューからご利用ください。\n\n「コーチを要請する」「フィードバックを送る」などをご利用いただけます。',
+    }]);
   } else {
     await clubClient.replyMessage(event.replyToken, [{
       type: 'text', text: '「クラブ登録する」または「コーチを要請する」と送信してください。',
