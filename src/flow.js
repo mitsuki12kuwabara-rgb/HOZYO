@@ -724,56 +724,54 @@ async function handleInquiry(userId, replyToken) {
 
 // ── フィードバック：開始 ──
 async function startFeedback(userId, replyToken, testMode = false) {
+  // テストモード：全チェックをスキップ
+  if (testMode) {
+    await saveSession(userId, STATE.FB_RATING, { fbCoachName: 'テストコーチ', fbRequest: null, fbTestMode: true });
+    await client.replyMessage(replyToken, [{
+      type: 'text',
+      text: '⭐ フィードバック送信（テストモード）\n\n今回の指導セッションを5段階で評価してください。',
+      quickReply: qr([['⭐ 1', '1'], ['⭐⭐ 2', '2'], ['⭐⭐⭐ 3', '3'], ['⭐⭐⭐⭐ 4', '4'], ['⭐⭐⭐⭐⭐ 5', '5']]),
+    }]);
+    return;
+  }
+
   const user = await getUser(userId);
   if (!user || user.status !== STATE.APPROVED) {
     await client.replyMessage(replyToken, [{ type: 'text', text: 'フィードバックはコーチ承認後に送ることができます。' }]);
     return;
   }
 
-  if (!testMode) {
-    const requests = await getRequestsByCoach(userId);
-    if (!requests || requests.length === 0) {
-      await client.replyMessage(replyToken, [{
-        type: 'text',
-        text: '現在マッチング中のセッションがないため、フィードバックを送ることができません。',
-      }]);
-      return;
-    }
-
-    if (requests.length === 1) {
-      // 1件のみなら自動選択
-      const r = requests[0];
-      await saveSession(userId, STATE.FB_RATING, {
-        fbCoachName: user.name,
-        fbRequest: { requestId: r.requestId, clubName: r.clubName, sport: r.sport, days: r.days, startTime: r.startTime, endTime: r.endTime },
-      });
-      await client.replyMessage(replyToken, [{
-        type: 'text',
-        text: `⭐ フィードバック送信\n\nセッション：${r.clubName}（${r.days} ${r.startTime}〜${r.endTime}）\n\n今回の指導を5段階で評価してください。`,
-        quickReply: qr([['⭐ 1', '1'], ['⭐⭐ 2', '2'], ['⭐⭐⭐ 3', '3'], ['⭐⭐⭐⭐ 4', '4'], ['⭐⭐⭐⭐⭐ 5', '5']]),
-      }]);
-      return;
-    }
-
-    // 複数ある場合はセッション選択
-    const sessionList = requests.map((r, i) =>
-      `${i + 1}. ${r.clubName}（${r.days} ${r.startTime}〜${r.endTime}）`
-    ).join('\n');
-    await saveSession(userId, STATE.FB_SESSION, { fbCoachName: user.name, fbRequests: requests });
+  const requests = await getRequestsByCoach(userId);
+  if (!requests || requests.length === 0) {
     await client.replyMessage(replyToken, [{
       type: 'text',
-      text: `フィードバックを送るセッションを選んでください：\n\n${sessionList}`,
-      quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.clubName}`, String(i + 1)])),
+      text: '現在マッチング中のセッションがないため、フィードバックを送ることができません。',
     }]);
     return;
   }
 
-  // テストモード：マッチングなしで送信可能
-  await saveSession(userId, STATE.FB_RATING, { fbCoachName: user.name, fbRequest: null, fbTestMode: true });
+  if (requests.length === 1) {
+    const r = requests[0];
+    await saveSession(userId, STATE.FB_RATING, {
+      fbCoachName: user.name,
+      fbRequest: { requestId: r.requestId, clubName: r.clubName, sport: r.sport, days: r.days, startTime: r.startTime, endTime: r.endTime },
+    });
+    await client.replyMessage(replyToken, [{
+      type: 'text',
+      text: `⭐ フィードバック送信\n\nセッション：${r.clubName}（${r.days} ${r.startTime}〜${r.endTime}）\n\n今回の指導を5段階で評価してください。`,
+      quickReply: qr([['⭐ 1', '1'], ['⭐⭐ 2', '2'], ['⭐⭐⭐ 3', '3'], ['⭐⭐⭐⭐ 4', '4'], ['⭐⭐⭐⭐⭐ 5', '5']]),
+    }]);
+    return;
+  }
+
+  const sessionList = requests.map((r, i) =>
+    `${i + 1}. ${r.clubName}（${r.days} ${r.startTime}〜${r.endTime}）`
+  ).join('\n');
+  await saveSession(userId, STATE.FB_SESSION, { fbCoachName: user.name, fbRequests: requests });
   await client.replyMessage(replyToken, [{
     type: 'text',
-    text: '⭐ フィードバック送信（テストモード）\n\n今回の指導セッションを5段階で評価してください。',
-    quickReply: qr([['⭐ 1', '1'], ['⭐⭐ 2', '2'], ['⭐⭐⭐ 3', '3'], ['⭐⭐⭐⭐ 4', '4'], ['⭐⭐⭐⭐⭐ 5', '5']]),
+    text: `フィードバックを送るセッションを選んでください：\n\n${sessionList}`,
+    quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.clubName}`, String(i + 1)])),
   }]);
 }
 

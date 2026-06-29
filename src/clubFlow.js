@@ -284,54 +284,54 @@ async function notifyClubAdmin(clubUserId, requestId, d) {
 
 // ── フィードバック：開始 ──
 async function startClubFeedback(userId, replyToken, testMode = false) {
+  // テストモード：全チェックをスキップ
+  if (testMode) {
+    await saveClubSession(userId, CLUB_STATE.CFB_RATING, { cfbClubName: 'テストクラブ', cfbRequest: null, cfbTestMode: true });
+    await clubClient.replyMessage(replyToken, [{
+      type: 'text',
+      text: '⭐ フィードバック送信（テストモード）\n\n今回の指導を5段階で評価してください。',
+      quickReply: qr([['⭐ 1','1'],['⭐⭐ 2','2'],['⭐⭐⭐ 3','3'],['⭐⭐⭐⭐ 4','4'],['⭐⭐⭐⭐⭐ 5','5']]),
+    }]);
+    return;
+  }
+
   const club = await getClub(userId);
   if (!club || !club.userId) {
     await clubClient.replyMessage(replyToken, [{ type: 'text', text: 'フィードバックはクラブ登録後に送ることができます。' }]);
     return;
   }
 
-  if (!testMode) {
-    const requests = await getRequestsByClub(userId);
-    if (!requests || requests.length === 0) {
-      await clubClient.replyMessage(replyToken, [{
-        type: 'text',
-        text: '現在マッチング中のコーチがいないため、フィードバックを送ることができません。',
-      }]);
-      return;
-    }
-
-    if (requests.length === 1) {
-      const r = requests[0];
-      await saveClubSession(userId, CLUB_STATE.CFB_RATING, {
-        cfbClubName: club.name,
-        cfbRequest: { requestId: r.requestId, coachName: r.coachName, coachUserId: r.coachUserId, sport: r.sport, days: r.days, startTime: r.startTime, endTime: r.endTime },
-      });
-      await clubClient.replyMessage(replyToken, [{
-        type: 'text',
-        text: `⭐ フィードバック送信\n\nコーチ：${r.coachName}（${r.days} ${r.startTime}〜${r.endTime}）\n\n今回の指導を5段階で評価してください。`,
-        quickReply: qr([['⭐ 1','1'],['⭐⭐ 2','2'],['⭐⭐⭐ 3','3'],['⭐⭐⭐⭐ 4','4'],['⭐⭐⭐⭐⭐ 5','5']]),
-      }]);
-      return;
-    }
-
-    const sessionList = requests.map((r, i) =>
-      `${i + 1}. ${r.coachName}（${r.days} ${r.startTime}〜${r.endTime}）`
-    ).join('\n');
-    await saveClubSession(userId, CLUB_STATE.CFB_SESSION, { cfbClubName: club.name, cfbRequests: requests });
+  const requests = await getRequestsByClub(userId);
+  if (!requests || requests.length === 0) {
     await clubClient.replyMessage(replyToken, [{
       type: 'text',
-      text: `フィードバックを送るコーチを選んでください：\n\n${sessionList}`,
-      quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.coachName}`, String(i + 1)])),
+      text: '現在マッチング中のコーチがいないため、フィードバックを送ることができません。',
     }]);
     return;
   }
 
-  // テストモード
-  await saveClubSession(userId, CLUB_STATE.CFB_RATING, { cfbClubName: club.name, cfbRequest: null, cfbTestMode: true });
+  if (requests.length === 1) {
+    const r = requests[0];
+    await saveClubSession(userId, CLUB_STATE.CFB_RATING, {
+      cfbClubName: club.name,
+      cfbRequest: { requestId: r.requestId, coachName: r.coachName, coachUserId: r.coachUserId, sport: r.sport, days: r.days, startTime: r.startTime, endTime: r.endTime },
+    });
+    await clubClient.replyMessage(replyToken, [{
+      type: 'text',
+      text: `⭐ フィードバック送信\n\nコーチ：${r.coachName}（${r.days} ${r.startTime}〜${r.endTime}）\n\n今回の指導を5段階で評価してください。`,
+      quickReply: qr([['⭐ 1','1'],['⭐⭐ 2','2'],['⭐⭐⭐ 3','3'],['⭐⭐⭐⭐ 4','4'],['⭐⭐⭐⭐⭐ 5','5']]),
+    }]);
+    return;
+  }
+
+  const sessionList = requests.map((r, i) =>
+    `${i + 1}. ${r.coachName}（${r.days} ${r.startTime}〜${r.endTime}）`
+  ).join('\n');
+  await saveClubSession(userId, CLUB_STATE.CFB_SESSION, { cfbClubName: club.name, cfbRequests: requests });
   await clubClient.replyMessage(replyToken, [{
     type: 'text',
-    text: '⭐ フィードバック送信（テストモード）\n\n今回の指導を5段階で評価してください。',
-    quickReply: qr([['⭐ 1','1'],['⭐⭐ 2','2'],['⭐⭐⭐ 3','3'],['⭐⭐⭐⭐ 4','4'],['⭐⭐⭐⭐⭐ 5','5']]),
+    text: `フィードバックを送るコーチを選んでください：\n\n${sessionList}`,
+    quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.coachName}`, String(i + 1)])),
   }]);
 }
 
