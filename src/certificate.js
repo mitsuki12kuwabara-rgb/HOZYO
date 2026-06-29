@@ -57,6 +57,16 @@ function buildCertFlex(user) {
               certRow('スポーツ', user.sport),
             ],
           },
+          ...(user.shifts ? (() => {
+            const shifts = typeof user.shifts === 'string' ? JSON.parse(user.shifts) : user.shifts;
+            const entries = Object.entries(shifts);
+            if (entries.length === 0) return [];
+            return [
+              { type: 'separator', margin: 'xl' },
+              { type: 'text', text: '📅 対応シフト', weight: 'bold', size: 'sm', margin: 'lg', color: '#444444' },
+              ...entries.map(([day, slots]) => certRow(`${day}曜日`, slots.join('、'))),
+            ];
+          })() : []),
           { type: 'separator', margin: 'xl' },
           { type: 'text', text: '全国大会出場経験 認定コーチ',
             size: 'sm', color: '#888888', align: 'center', margin: 'lg' },

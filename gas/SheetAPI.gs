@@ -13,6 +13,7 @@ var SHEET = {
   CLUB_USERS:    'クラブ登録者',
   CLUB_SESSIONS: 'クラブセッション',
   REQUESTS:      '要請',
+  ABSENCE:       '欠席報告',
 };
 
 // ── メインエントリー ──
@@ -31,6 +32,9 @@ function doPost(e) {
       case 'saveUser':      return res({ regNo: saveUser(body.userId, body.data) });
       case 'getUser':       return res(getUser(body.userId));
       case 'updateStatus':  updateStatus(body.userId, body.status, body.approvedAt); return res({ ok: true });
+      case 'saveShifts':        saveShifts(body.userId, body.shifts); return res({ ok: true });
+      case 'getRequestsByCoach': return res(getRequestsByCoach(body.coachUserId));
+      case 'saveAbsenceReport': return res(saveAbsenceReport(body.userId, body.data));
       // クラブ側
       case 'getClubSession':    return res(getClubSession(body.userId));
       case 'saveClubSession':   saveClubSession(body.userId, body.state, body.tempData); return res({ ok: true });
@@ -61,8 +65,8 @@ function setup() {
 
   var users = ss.getSheetByName(SHEET.USERS) || ss.insertSheet(SHEET.USERS);
   if (users.getLastRow() === 0) {
-    users.appendRow(['LINE UserID','名前','年齢','スポーツ','学生証MsgID','大会名','証明MsgID','登録日時','ステータス','承認日時','登録番号']);
-    users.getRange(1,1,1,11).setFontWeight('bold').setBackground('#4a86e8').setFontColor('#ffffff');
+    users.appendRow(['LINE UserID','名前','年齢','スポーツ','学生証MsgID','大会名','証明MsgID','登録日時','ステータス','承認日時','登録番号','シフトJSON']);
+    users.getRange(1,1,1,12).setFontWeight('bold').setBackground('#4a86e8').setFontColor('#ffffff');
   }
 
   var sess = ss.getSheetByName(SHEET.SESSIONS) || ss.insertSheet(SHEET.SESSIONS);
@@ -154,10 +158,51 @@ function getUser(userId) {
         userId: rows[i][0], name: rows[i][1], age: rows[i][2], sport: rows[i][3],
         studentIdMsgId: rows[i][4], tournamentName: rows[i][5], proofMsgId: rows[i][6],
         registeredAt: rows[i][7], status: rows[i][8], approvedAt: rows[i][9], regNo: rows[i][10],
+        shifts: rows[i][11] || '',
       };
     }
   }
   return null;
+}
+
+function saveShifts(userId, shifts) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.USERS);
+  var rows  = sheet.getDataRange().getValues();
+  var json  = JSON.stringify(shifts || {});
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i][0] === userId) {
+      sheet.getRange(i+1, 12).setValue(json);
+      return;
+    }
+  }
+}
+
+function getRequestsByCoach(coachUserId) {
+  var rows = SpreadsheetApp.getActiveSpreadsheet()
+    .getSheetByName(SHEET.REQUESTS).getDataRange().getValues();
+  var result = [];
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i][9] === coachUserId && rows[i][8] === 'MATCHED') {
+      result.push({
+        requestId: rows[i][0], clubUserId: rows[i][1], sport: rows[i][2],
+        clubName: rows[i][3], days: rows[i][4],
+        startTime: cellToTimeString(rows[i][5]), endTime: cellToTimeString(rows[i][6]),
+        reqLocation: rows[i][7],
+      });
+    }
+  }
+  return result;
+}
+
+function saveAbsenceReport(userId, data) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.ABSENCE);
+  if (!sheet) sheet = SpreadsheetApp.getActiveSpreadsheet().insertSheet(SHEET.ABSENCE);
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(['報告日時','コーチUserID','コーチ名','要請ID','クラブ名','欠席日','理由']);
+    sheet.getRange(1,1,1,7).setFontWeight('bold').setBackground('#cc0000').setFontColor('#ffffff');
+  }
+  sheet.appendRow([new Date().toISOString(), userId, data.coachName, data.requestId, data.clubName, data.date, data.reason || '']);
+  return { ok: true };
 }
 
 function updateStatus(userId, status, approvedAt) {
@@ -247,12 +292,19 @@ function saveRequest(clubUserId, data) {
   return requestId;
 }
 
+function cellToTimeString(val) {
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'H:mm');
+  }
+  return String(val);
+}
+
 function getRequest(requestId) {
   var rows = SpreadsheetApp.getActiveSpreadsheet()
     .getSheetByName(SHEET.REQUESTS).getDataRange().getValues();
   for (var i = 1; i < rows.length; i++) {
     if (rows[i][0] === requestId) {
-      return { requestId: rows[i][0], clubUserId: rows[i][1], sport: rows[i][2], clubName: rows[i][3], days: rows[i][4], startTime: rows[i][5], endTime: rows[i][6], reqLocation: rows[i][7], status: rows[i][8], coachUserId: rows[i][9] };
+      return { requestId: rows[i][0], clubUserId: rows[i][1], sport: rows[i][2], clubName: rows[i][3], days: rows[i][4], startTime: cellToTimeString(rows[i][5]), endTime: cellToTimeString(rows[i][6]), reqLocation: rows[i][7], status: rows[i][8], coachUserId: rows[i][9] };
     }
   }
   return null;

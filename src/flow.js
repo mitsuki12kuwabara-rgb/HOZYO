@@ -1,10 +1,27 @@
 const lineClient                                       = require('./lineClient');
 const { client }                                       = lineClient;
 const { getSession, saveSession, deleteSession,
-        saveUser, getUser }                            = require('./gasClient');
+        saveUser, getUser, saveShifts,
+        getRequestsByCoach, saveAbsenceReport }        = require('./gasClient');
 const { sendCertificate }                              = require('./certificate');
 const config                                           = require('./config');
 const { STATE, SPORTS, adminUserId, adminImageSecret, renderUrl } = config;
+
+const DAYS = ['月', '火', '水', '木', '金', '土', '日'];
+
+const WEEKDAY_SLOTS = [
+  '15:30〜17:30', '15:30〜18:00', '16:00〜18:00',
+  '16:00〜18:30', '16:00〜19:00', '17:00〜19:00',
+  '18:00〜20:00', '18:00〜21:00',
+];
+const WEEKEND_SLOTS = [
+  '9:00〜12:00', '9:00〜13:00', '10:00〜12:00', '10:00〜13:00',
+  '13:00〜15:00', '13:00〜17:00', '14:00〜17:00',
+];
+
+function getSlotOptions(day) {
+  return (day === '土' || day === '日') ? WEEKEND_SLOTS : WEEKDAY_SLOTS;
+}
 
 // ── クイックリプライ ──
 function qr(items) {
@@ -157,17 +174,250 @@ async function showConfirmation(replyToken, data) {
 async function handleConfirmInput(userId, message, replyToken, session) {
   if (message.type !== 'text') return;
   if (message.text === '申請する') {
-    await submitRegistration(userId, replyToken, session.tempData);
+    // シフト登録フローへ
+    await saveSession(userId, STATE.SHIFT_DAYS, { ...session.tempData, shiftDays: [], shifts: {} });
+    await client.replyMessage(replyToken, [{
+      type: 'text',
+      text: '⑦ シフト登録\n\n対応可能な曜日を選んでください。\n（複数選択できます。選び終わったら「選択完了」を押してください）',
+      quickReply: qr(DAYS.map(d => [d]).concat([['選択完了', '選択完了']])),
+    }]);
   } else if (message.text === 'やり直す') {
     await deleteSession(userId);
     await client.replyMessage(replyToken, [{ type: 'text', text: '登録をリセットしました。「コーチ登録する」から再度お試しください。' }]);
   }
 }
 
+// ── シフト：曜日選択 ──
+async function handleShiftDays(userId, message, replyToken, session) {
+  const text = message.text?.trim();
+  const tempData = session.tempData;
+  const selected = tempData.shiftDays || [];
+
+  if (text === '選択完了') {
+    if (selected.length === 0) {
+      await client.replyMessage(replyToken, [{
+        type: 'text', text: '少なくとも1つの曜日を選択してください。',
+        quickReply: qr(DAYS.map(d => [d]).concat([['選択完了', '選択完了']])),
+      }]);
+      return;
+    }
+    await saveSession(userId, STATE.SHIFT_SLOT, { ...tempData, currentDayIdx: 0, currentSlots: [] });
+    await askShiftSlots(replyToken, selected[0]);
+    return;
+  }
+
+  if (DAYS.includes(text) && !selected.includes(text)) selected.push(text);
+  await saveSession(userId, STATE.SHIFT_DAYS, { ...tempData, shiftDays: selected });
+  const remaining = DAYS.filter(d => !selected.includes(d));
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: `✅ 選択中：${selected.join('・')}\n\n他の曜日も選ぶか「選択完了」を押してください。`,
+    quickReply: qr(remaining.map(d => [d]).concat([['選択完了', '選択完了']])),
+  }]);
+}
+
+async function askShiftSlots(replyToken, day) {
+  const options = getSlotOptions(day);
+  const type = (day === '土' || day === '日') ? '（午前・午後を複数選択できます）' : '（複数選択できます）';
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: `${day}曜日の対応可能な時間帯を選んでください。\n${type}`,
+    quickReply: qr(options.map(o => [o]).concat([['この曜日は完了', 'この曜日は完了']])),
+  }]);
+}
+
+// ── シフト：時間帯選択 ──
+async function handleShiftSlot(userId, message, replyToken, session) {
+  const text = message.text?.trim();
+  const tempData = session.tempData;
+  const { shiftDays, currentDayIdx, shifts } = tempData;
+  const currentSlots = tempData.currentSlots || [];
+  const currentDay = shiftDays[currentDayIdx];
+  const options = getSlotOptions(currentDay);
+
+  if (text === 'この曜日は完了') {
+    if (currentSlots.length === 0) {
+      await client.replyMessage(replyToken, [{
+        type: 'text', text: '少なくとも1つの時間帯を選択してください。',
+        quickReply: qr(options.map(o => [o]).concat([['この曜日は完了', 'この曜日は完了']])),
+      }]);
+      return;
+    }
+    const newShifts = { ...shifts, [currentDay]: currentSlots };
+    const nextIdx = currentDayIdx + 1;
+    if (nextIdx >= shiftDays.length) {
+      await saveSession(userId, STATE.SHIFT_CONFIRM, { ...tempData, shifts: newShifts });
+      await showShiftConfirmation(replyToken, shiftDays, newShifts);
+    } else {
+      await saveSession(userId, STATE.SHIFT_SLOT, { ...tempData, shifts: newShifts, currentDayIdx: nextIdx, currentSlots: [] });
+      await askShiftSlots(replyToken, shiftDays[nextIdx]);
+    }
+    return;
+  }
+
+  if (options.includes(text) && !currentSlots.includes(text)) {
+    currentSlots.push(text);
+    await saveSession(userId, STATE.SHIFT_SLOT, { ...tempData, currentSlots });
+    const remaining = options.filter(o => !currentSlots.includes(o));
+    await client.replyMessage(replyToken, [{
+      type: 'text',
+      text: `✅ ${currentDay}曜日 選択中：\n${currentSlots.join('\n')}\n\n他の時間帯を選ぶか「この曜日は完了」を押してください。`,
+      quickReply: qr(remaining.map(o => [o]).concat([['この曜日は完了', 'この曜日は完了']])),
+    }]);
+    return;
+  }
+
+  await client.replyMessage(replyToken, [{
+    type: 'text', text: 'ボタンから時間帯を選んでください。',
+    quickReply: qr(options.map(o => [o]).concat([['この曜日は完了', 'この曜日は完了']])),
+  }]);
+}
+
+async function showShiftConfirmation(replyToken, shiftDays, shifts) {
+  const shiftText = shiftDays.map(d => `${d}曜日：${shifts[d].join('、')}`).join('\n');
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: `📅 シフト確認\n\n${shiftText}\n\nこの内容で登録しますか？`,
+    quickReply: qr([['✅ 登録する', '登録する'], ['🔄 シフトをやり直す', 'シフトをやり直す']]),
+  }]);
+}
+
+// ── シフト：確認 ──
+async function handleShiftConfirm(userId, message, replyToken, session) {
+  const text = message.text?.trim();
+  if (text === 'シフトをやり直す') {
+    await saveSession(userId, STATE.SHIFT_DAYS, { ...session.tempData, shiftDays: [], shifts: {}, currentDayIdx: 0, currentSlots: [] });
+    await client.replyMessage(replyToken, [{
+      type: 'text',
+      text: '対応可能な曜日を選び直してください。',
+      quickReply: qr(DAYS.map(d => [d]).concat([['選択完了', '選択完了']])),
+    }]);
+    return;
+  }
+  if (text === '登録する') {
+    await submitRegistration(userId, replyToken, session.tempData);
+  }
+}
+
+// ── 欠席報告：開始 ──
+async function startAbsenceReport(userId, replyToken) {
+  const requests = await getRequestsByCoach(userId);
+  if (!requests || requests.length === 0) {
+    await client.replyMessage(replyToken, [{ type: 'text', text: '現在マッチング中のセッションがありません。' }]);
+    return;
+  }
+  const sessionList = requests.map((r, i) =>
+    `${i + 1}. ${r.clubName}\n   ${r.sport} ${r.days} ${r.startTime}〜${r.endTime}`
+  ).join('\n\n');
+  await saveSession(userId, STATE.REPORT_SESSION, { absenceRequests: requests });
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: `都合が悪いセッションを選んでください：\n\n${sessionList}`,
+    quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.clubName}`, String(i + 1)])),
+  }]);
+}
+
+// ── 欠席報告：セッション選択 ──
+async function handleReportSession(userId, message, replyToken, session) {
+  const idx = parseInt(message.text?.trim(), 10) - 1;
+  const requests = session.tempData.absenceRequests || [];
+  if (isNaN(idx) || idx < 0 || idx >= requests.length) {
+    await client.replyMessage(replyToken, [{
+      type: 'text', text: '番号をボタンから選んでください。',
+      quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.clubName}`, String(i + 1)])),
+    }]);
+    return;
+  }
+  const selected = requests[idx];
+  await saveSession(userId, STATE.REPORT_DATE, { ...session.tempData, selectedRequest: selected });
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: `【${selected.clubName} / ${selected.days} ${selected.startTime}〜${selected.endTime}】\n\n都合が悪い日付を入力してください。\n（例：7月5日、7/5）`,
+  }]);
+}
+
+// ── 欠席報告：日付入力 ──
+async function handleReportDate(userId, message, replyToken, session) {
+  const date = message.text?.trim();
+  if (!date) {
+    await client.replyMessage(replyToken, [{ type: 'text', text: '日付を入力してください。（例：7月5日）' }]);
+    return;
+  }
+  await saveSession(userId, STATE.REPORT_REASON, { ...session.tempData, absenceDate: date });
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: '理由があれば入力してください。\n（任意：スキップする場合は「スキップ」と送信）',
+  }]);
+}
+
+// ── 欠席報告：理由入力 ──
+async function handleReportReason(userId, message, replyToken, session) {
+  const reason = message.text?.trim() === 'スキップ' ? '' : message.text?.trim();
+  const d = session.tempData;
+  await saveSession(userId, STATE.REPORT_CONFIRM, { ...d, absenceReason: reason });
+  const r = d.selectedRequest;
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: `【欠席報告の確認】\n\nセッション：${r.clubName}\n曜日・時間：${r.days} ${r.startTime}〜${r.endTime}\n日付：${d.absenceDate}${reason ? `\n理由：${reason}` : ''}\n\nこの内容で報告しますか？`,
+    quickReply: qr([['✅ 報告する', '報告する'], ['キャンセル', 'キャンセル']]),
+  }]);
+}
+
+// ── 欠席報告：確認 ──
+async function handleReportConfirm(userId, message, replyToken, session) {
+  const text = message.text?.trim();
+  if (text === 'キャンセル') {
+    await saveSession(userId, STATE.APPROVED, {});
+    await client.replyMessage(replyToken, [{ type: 'text', text: '報告をキャンセルしました。' }]);
+    return;
+  }
+  if (text !== '報告する') return;
+
+  const d = session.tempData;
+  const r = d.selectedRequest;
+  const coach = await getUser(userId);
+
+  await saveAbsenceReport(userId, {
+    requestId: r.requestId, clubName: r.clubName, date: d.absenceDate,
+    reason: d.absenceReason, coachName: coach?.name || '',
+  });
+
+  // 管理者通知
+  await client.pushMessage(adminUserId, [{
+    type: 'flex', altText: `【欠席報告】${coach?.name || ''} さん`,
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: '#e05c2a',
+        contents: [{ type: 'text', text: '⚠️ コーチ欠席報告', weight: 'bold', size: 'lg', color: '#ffffff' }],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm',
+        contents: [
+          row('コーチ名',   coach?.name || ''),
+          row('登録番号',   coach?.regNo || ''),
+          row('クラブ',     r.clubName),
+          row('スポーツ',   r.sport),
+          row('通常曜日',   `${r.days} ${r.startTime}〜${r.endTime}`),
+          row('欠席日',     d.absenceDate),
+          row('理由',       d.absenceReason || '（未記入）'),
+        ],
+      },
+    },
+  }]);
+
+  await saveSession(userId, STATE.APPROVED, {});
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: `✅ 報告を受け付けました。\n\n欠席日：${d.absenceDate}\nセッション：${r.clubName}\n\n担当者が確認次第、このLINEでご連絡します。`,
+  }]);
+}
+
 // ── 申請送信 ──
 async function submitRegistration(userId, replyToken, data) {
   try {
     const { regNo } = await saveUser(userId, data);
+    if (data.shifts) await saveShifts(userId, data.shifts);
     await saveSession(userId, STATE.PENDING, {});
     await notifyAdmin(userId, data, regNo);
     await client.replyMessage(replyToken, [{
@@ -222,6 +472,11 @@ async function notifyAdmin(userId, data, regNo) {
           row('年齢',     `${data.age}歳`),
           row('スポーツ', data.sport),
           row('大会名',   data.tournamentName),
+          ...(data.shifts ? [
+            { type: 'separator', margin: 'lg' },
+            { type: 'text', text: '📅 シフト', weight: 'bold', size: 'sm', margin: 'md' },
+            ...Object.entries(data.shifts).map(([day, slots]) => row(`${day}曜日`, slots.join('、'))),
+          ] : []),
           { type: 'separator', margin: 'lg' },
           ...imageButtons,
           { type: 'text', text: `LINE ID: ${userId}`, size: 'xxs', color: '#aaaaaa', margin: 'md', wrap: true },
@@ -392,4 +647,7 @@ module.exports = {
   handleName, handleAge, handleSport,
   handleStudentId, handleTournamentName, handleTournamentProof,
   handleConfirmInput, handleMatchingCheck, handleInquiry, handleDetails,
+  handleShiftDays, handleShiftSlot, handleShiftConfirm,
+  startAbsenceReport, handleReportSession, handleReportDate,
+  handleReportReason, handleReportConfirm,
 };

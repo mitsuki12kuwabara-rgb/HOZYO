@@ -7,6 +7,9 @@ const {
   handleName, handleAge, handleSport,
   handleStudentId, handleTournamentName, handleTournamentProof,
   handleConfirmInput, handleMatchingCheck, handleInquiry, handleDetails,
+  handleShiftDays, handleShiftSlot, handleShiftConfirm,
+  startAbsenceReport, handleReportSession, handleReportDate,
+  handleReportReason, handleReportConfirm,
 } = require('./flow');
 const { handlePostback }    = require('./admin');
 const { resendCertificate } = require('./certificate');
@@ -78,10 +81,11 @@ async function handleEvent(event) {
   if (event.message.type === 'text') {
     const t = event.message.text;
     if (t === 'コーチ登録する' || t === '応募') { await startRegistration(userId, event.replyToken); return; }
-    if (t === '詳細')           { await handleDetails(userId, event.replyToken); return; }
-    if (t === '登録証を見る')   { await resendCertificate(userId, event.replyToken); return; }
-    if (t === 'マッチング確認') { await handleMatchingCheck(userId, event.replyToken); return; }
+    if (t === '詳細')                 { await handleDetails(userId, event.replyToken); return; }
+    if (t === '登録証を見る')         { await resendCertificate(userId, event.replyToken); return; }
+    if (t === 'マッチング確認')       { await handleMatchingCheck(userId, event.replyToken); return; }
     if (t === 'お問い合わせ' || t === '問い合わせ') { await handleInquiry(userId, event.replyToken); return; }
+    if (t === '都合が悪い日を報告')   { await startAbsenceReport(userId, event.replyToken); return; }
   }
 
   // 登録フロー
@@ -96,6 +100,13 @@ async function handleEvent(event) {
     [STATE.TOURNAMENT_NAME]:  handleTournamentName,
     [STATE.TOURNAMENT_PROOF]: handleTournamentProof,
     [STATE.CONFIRM]:          handleConfirmInput,
+    [STATE.SHIFT_DAYS]:       handleShiftDays,
+    [STATE.SHIFT_SLOT]:       handleShiftSlot,
+    [STATE.SHIFT_CONFIRM]:    handleShiftConfirm,
+    [STATE.REPORT_SESSION]:   handleReportSession,
+    [STATE.REPORT_DATE]:      handleReportDate,
+    [STATE.REPORT_REASON]:    handleReportReason,
+    [STATE.REPORT_CONFIRM]:   handleReportConfirm,
   };
 
   if (handlers[state]) {
