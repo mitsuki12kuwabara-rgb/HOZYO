@@ -24,6 +24,9 @@ module.exports = {
   getRequestsByCoach: (coachUserId)                => call('getRequestsByCoach', { coachUserId }),
   saveAbsenceReport:  (userId, data)               => call('saveAbsenceReport',  { userId, data }),
   saveFeedback:       (userId, data)               => call('saveFeedback',       { userId, data }),
+  // クラブ側フィードバック
+  getRequestsByClub:  (clubUserId)                 => call('getRequestsByClub',  { clubUserId }),
+  saveClubFeedback:   (userId, data)               => call('saveClubFeedback',   { userId, data }),
   // クラブ側
   getClubSession:    (userId)                  => call('getClubSession',    { userId }),
   saveClubSession:   (userId, state, tempData) => call('saveClubSession',   { userId, state, tempData }),

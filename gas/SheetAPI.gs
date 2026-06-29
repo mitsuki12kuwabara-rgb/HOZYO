@@ -35,7 +35,9 @@ function doPost(e) {
       case 'saveShifts':        saveShifts(body.userId, body.shifts); return res({ ok: true });
       case 'getRequestsByCoach': return res(getRequestsByCoach(body.coachUserId));
       case 'saveAbsenceReport': return res(saveAbsenceReport(body.userId, body.data));
-      case 'saveFeedback':      return res(saveFeedback(body.userId, body.data));
+      case 'saveFeedback':        return res(saveFeedback(body.userId, body.data));
+      case 'getRequestsByClub':   return res(getRequestsByClub(body.clubUserId));
+      case 'saveClubFeedback':    return res(saveClubFeedback(body.userId, body.data));
       // クラブ側
       case 'getClubSession':    return res(getClubSession(body.userId));
       case 'saveClubSession':   saveClubSession(body.userId, body.state, body.tempData); return res({ ok: true });
@@ -209,6 +211,47 @@ function saveAbsenceReport(userId, data) {
     sheet.getRange(1,1,1,7).setFontWeight('bold').setBackground('#cc0000').setFontColor('#ffffff');
   }
   sheet.appendRow([new Date().toISOString(), userId, data.coachName, data.requestId, data.clubName, data.date, data.reason || '']);
+  return { ok: true };
+}
+
+function getRequestsByClub(clubUserId) {
+  var rows = SpreadsheetApp.getActiveSpreadsheet()
+    .getSheetByName(SHEET.REQUESTS).getDataRange().getValues();
+  var result = [];
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i][1] === clubUserId && rows[i][8] === 'MATCHED') {
+      // コーチ名を登録者シートから取得
+      var coachUserId = rows[i][9];
+      var coachName = '';
+      var userRows = SpreadsheetApp.getActiveSpreadsheet()
+        .getSheetByName(SHEET.USERS).getDataRange().getValues();
+      for (var j = 1; j < userRows.length; j++) {
+        if (userRows[j][0] === coachUserId) { coachName = userRows[j][1]; break; }
+      }
+      result.push({
+        requestId: rows[i][0], clubUserId: rows[i][1], sport: rows[i][2],
+        clubName: rows[i][3], days: rows[i][4],
+        startTime: cellToTimeString(rows[i][5]), endTime: cellToTimeString(rows[i][6]),
+        reqLocation: rows[i][7], coachUserId: coachUserId, coachName: coachName,
+      });
+    }
+  }
+  return result;
+}
+
+function saveClubFeedback(userId, data) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('クラブフィードバック');
+  if (!sheet) {
+    sheet = ss.insertSheet('クラブフィードバック');
+    sheet.appendRow(['送信日時','クラブUserID','クラブ名','コーチ名','コーチUserID','要請ID','評価（5段階）','コメント','テストモード']);
+    sheet.getRange(1,1,1,9).setFontWeight('bold').setBackground('#6a4c93').setFontColor('#ffffff');
+  }
+  sheet.appendRow([
+    new Date().toISOString(), userId, data.clubName || '',
+    data.coachName || '', data.coachUserId || '', data.requestId || '',
+    data.rating, data.comment || '', data.testMode ? 'YES' : '',
+  ]);
   return { ok: true };
 }
 

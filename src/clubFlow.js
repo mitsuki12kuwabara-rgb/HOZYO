@@ -1,6 +1,7 @@
 const { clubClient }                                    = require('./clubClient');
 const { getClubSession, saveClubSession, deleteClubSession,
-        saveClub, getClub, saveRequest }                = require('./gasClient');
+        saveClub, getClub, saveRequest,
+        getRequestsByClub, saveClubFeedback }           = require('./gasClient');
 const config                                            = require('./config');
 
 const CLUB_STATE = {
@@ -16,6 +17,9 @@ const CLUB_STATE = {
   REQ_END:      'REQ_END',
   REQ_LOCATION: 'REQ_LOCATION',
   REQ_CONFIRM:  'REQ_CONFIRM',
+  CFB_SESSION:  'CLUB_FB_SESSION',
+  CFB_RATING:   'CLUB_FB_RATING',
+  CFB_COMMENT:  'CLUB_FB_COMMENT',
 };
 
 const SPORTS = ['バスケットボール', 'サッカー', '野球'];
@@ -278,6 +282,165 @@ async function notifyClubAdmin(clubUserId, requestId, d) {
   ]);
 }
 
+// ── フィードバック：開始 ──
+async function startClubFeedback(userId, replyToken, testMode = false) {
+  const club = await getClub(userId);
+  if (!club || !club.userId) {
+    await clubClient.replyMessage(replyToken, [{ type: 'text', text: 'フィードバックはクラブ登録後に送ることができます。' }]);
+    return;
+  }
+
+  if (!testMode) {
+    const requests = await getRequestsByClub(userId);
+    if (!requests || requests.length === 0) {
+      await clubClient.replyMessage(replyToken, [{
+        type: 'text',
+        text: '現在マッチング中のコーチがいないため、フィードバックを送ることができません。',
+      }]);
+      return;
+    }
+
+    if (requests.length === 1) {
+      const r = requests[0];
+      await saveClubSession(userId, CLUB_STATE.CFB_RATING, {
+        cfbClubName: club.name,
+        cfbRequest: { requestId: r.requestId, coachName: r.coachName, coachUserId: r.coachUserId, sport: r.sport, days: r.days, startTime: r.startTime, endTime: r.endTime },
+      });
+      await clubClient.replyMessage(replyToken, [{
+        type: 'text',
+        text: `⭐ フィードバック送信\n\nコーチ：${r.coachName}（${r.days} ${r.startTime}〜${r.endTime}）\n\n今回の指導を5段階で評価してください。`,
+        quickReply: qr([['⭐ 1','1'],['⭐⭐ 2','2'],['⭐⭐⭐ 3','3'],['⭐⭐⭐⭐ 4','4'],['⭐⭐⭐⭐⭐ 5','5']]),
+      }]);
+      return;
+    }
+
+    const sessionList = requests.map((r, i) =>
+      `${i + 1}. ${r.coachName}（${r.days} ${r.startTime}〜${r.endTime}）`
+    ).join('\n');
+    await saveClubSession(userId, CLUB_STATE.CFB_SESSION, { cfbClubName: club.name, cfbRequests: requests });
+    await clubClient.replyMessage(replyToken, [{
+      type: 'text',
+      text: `フィードバックを送るコーチを選んでください：\n\n${sessionList}`,
+      quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.coachName}`, String(i + 1)])),
+    }]);
+    return;
+  }
+
+  // テストモード
+  await saveClubSession(userId, CLUB_STATE.CFB_RATING, { cfbClubName: club.name, cfbRequest: null, cfbTestMode: true });
+  await clubClient.replyMessage(replyToken, [{
+    type: 'text',
+    text: '⭐ フィードバック送信（テストモード）\n\n今回の指導を5段階で評価してください。',
+    quickReply: qr([['⭐ 1','1'],['⭐⭐ 2','2'],['⭐⭐⭐ 3','3'],['⭐⭐⭐⭐ 4','4'],['⭐⭐⭐⭐⭐ 5','5']]),
+  }]);
+}
+
+// ── フィードバック：セッション選択 ──
+async function handleCfbSession(userId, message, replyToken, session) {
+  const idx = parseInt(message.text?.trim(), 10) - 1;
+  const requests = session.tempData.cfbRequests || [];
+  if (isNaN(idx) || idx < 0 || idx >= requests.length) {
+    await clubClient.replyMessage(replyToken, [{
+      type: 'text', text: '番号をボタンから選んでください。',
+      quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.coachName}`, String(i + 1)])),
+    }]);
+    return;
+  }
+  const r = requests[idx];
+  await saveClubSession(userId, CLUB_STATE.CFB_RATING, {
+    ...session.tempData,
+    cfbRequest: { requestId: r.requestId, coachName: r.coachName, coachUserId: r.coachUserId, sport: r.sport, days: r.days, startTime: r.startTime, endTime: r.endTime },
+  });
+  await clubClient.replyMessage(replyToken, [{
+    type: 'text',
+    text: `⭐ フィードバック送信\n\nコーチ：${r.coachName}（${r.days} ${r.startTime}〜${r.endTime}）\n\n今回の指導を5段階で評価してください。`,
+    quickReply: qr([['⭐ 1','1'],['⭐⭐ 2','2'],['⭐⭐⭐ 3','3'],['⭐⭐⭐⭐ 4','4'],['⭐⭐⭐⭐⭐ 5','5']]),
+  }]);
+}
+
+// ── フィードバック：評価 ──
+async function handleCfbRating(userId, message, replyToken, session) {
+  const rating = parseInt(message.text?.trim(), 10);
+  if (isNaN(rating) || rating < 1 || rating > 5) {
+    await clubClient.replyMessage(replyToken, [{
+      type: 'text', text: '1〜5の数字をボタンから選んでください。',
+      quickReply: qr([['⭐ 1','1'],['⭐⭐ 2','2'],['⭐⭐⭐ 3','3'],['⭐⭐⭐⭐ 4','4'],['⭐⭐⭐⭐⭐ 5','5']]),
+    }]);
+    return;
+  }
+  await saveClubSession(userId, CLUB_STATE.CFB_COMMENT, { ...session.tempData, cfbRating: rating });
+  await clubClient.replyMessage(replyToken, [{
+    type: 'text',
+    text: `評価：${'⭐'.repeat(rating)}（${rating}）\n\nコメントがあれば入力してください。\n（スキップする場合は「スキップ」と送信）`,
+  }]);
+}
+
+// ── フィードバック：コメント ──
+async function handleCfbComment(userId, message, replyToken, session) {
+  const comment = message.text?.trim() === 'スキップ' ? '' : message.text?.trim();
+  const d = session.tempData;
+  const r = d.cfbRequest;
+
+  await saveClubFeedback(userId, {
+    clubName: d.cfbClubName, rating: d.cfbRating, comment,
+    coachName: r?.coachName || '', coachUserId: r?.coachUserId || '',
+    requestId: r?.requestId || '', testMode: d.cfbTestMode || false,
+  });
+
+  // 管理者通知（クラブ管理者）
+  const adminId = config.clubAdminUserId;
+  if (adminId) {
+    const bodyRows = [
+      { type: 'box', layout: 'horizontal', margin: 'sm', contents: [
+        { type: 'text', text: 'クラブ名', size: 'sm', color: '#777777', flex: 2 },
+        { type: 'text', text: d.cfbClubName, size: 'sm', color: '#111111', flex: 4, wrap: true },
+      ]},
+      ...(r ? [
+        { type: 'box', layout: 'horizontal', margin: 'sm', contents: [
+          { type: 'text', text: 'コーチ名', size: 'sm', color: '#777777', flex: 2 },
+          { type: 'text', text: r.coachName, size: 'sm', color: '#111111', flex: 4, wrap: true },
+        ]},
+        { type: 'box', layout: 'horizontal', margin: 'sm', contents: [
+          { type: 'text', text: '曜日・時間', size: 'sm', color: '#777777', flex: 2 },
+          { type: 'text', text: `${r.days} ${r.startTime}〜${r.endTime}`, size: 'sm', color: '#111111', flex: 4, wrap: true },
+        ]},
+      ] : [{ type: 'box', layout: 'horizontal', margin: 'sm', contents: [
+        { type: 'text', text: 'コーチ', size: 'sm', color: '#777777', flex: 2 },
+        { type: 'text', text: '（テストモード・未選択）', size: 'sm', color: '#111111', flex: 4, wrap: true },
+      ]}]),
+      { type: 'box', layout: 'horizontal', margin: 'sm', contents: [
+        { type: 'text', text: '評価', size: 'sm', color: '#777777', flex: 2 },
+        { type: 'text', text: '⭐'.repeat(d.cfbRating) + `（${d.cfbRating}/5）`, size: 'sm', color: '#111111', flex: 4, wrap: true },
+      ]},
+      { type: 'box', layout: 'horizontal', margin: 'sm', contents: [
+        { type: 'text', text: 'コメント', size: 'sm', color: '#777777', flex: 2 },
+        { type: 'text', text: comment || '（なし）', size: 'sm', color: '#111111', flex: 4, wrap: true },
+      ]},
+      { type: 'text', text: `LINE ID: ${userId}`, size: 'xxs', color: '#aaaaaa', margin: 'md', wrap: true },
+    ];
+    await clubClient.pushMessage(adminId, [{
+      type: 'flex', altText: `【クラブFB】${d.cfbClubName}`,
+      contents: {
+        type: 'bubble',
+        header: {
+          type: 'box', layout: 'vertical', backgroundColor: '#6a4c93',
+          contents: [
+            { type: 'text', text: '📝 クラブからのフィードバック', weight: 'bold', size: 'lg', color: '#ffffff' },
+            ...(d.cfbTestMode ? [{ type: 'text', text: '※テストモード', size: 'xs', color: '#e0d0ff' }] : []),
+          ],
+        },
+        body: { type: 'box', layout: 'vertical', spacing: 'sm', contents: bodyRows },
+      },
+    }]);
+  }
+
+  await saveClubSession(userId, CLUB_STATE.REGISTERED, {});
+  await clubClient.replyMessage(replyToken, [{
+    type: 'text',
+    text: `✅ フィードバックを送信しました。\n\n評価：${'⭐'.repeat(d.cfbRating)}（${d.cfbRating}/5）${comment ? `\nコメント：${comment}` : ''}\n\nありがとうございました！`,
+  }]);
+}
+
 // ── 問い合わせ ──
 async function handleClubInquiry(userId, replyToken) {
   await clubClient.replyMessage(replyToken, [{
@@ -327,4 +490,8 @@ module.exports = {
   handleReqLocation,
   handleReqConfirm,
   handleClubInquiry,
+  startClubFeedback,
+  handleCfbSession,
+  handleCfbRating,
+  handleCfbComment,
 };

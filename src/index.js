@@ -25,6 +25,7 @@ const {
   startRequest, handleReqDays, handleReqStart,
   handleReqEnd, handleReqLocation, handleReqConfirm,
   handleClubInquiry,
+  startClubFeedback, handleCfbSession, handleCfbRating, handleCfbComment,
 } = require('./clubFlow');
 const { getClubSession }    = require('./gasClient');
 const config                = require('./config');
@@ -151,6 +152,8 @@ async function handleClubEvent(event) {
     if (t === 'クラブ登録する') { await startClubRegistration(userId, event.replyToken); return; }
     if (t === 'コーチを要請する') { await startRequest(userId, event.replyToken); return; }
     if (t === 'お問い合わせ' || t === '問い合わせ') { await handleClubInquiry(userId, event.replyToken); return; }
+    if (t === 'フィードバックを送る') { await startClubFeedback(userId, event.replyToken, false); return; }
+    if (t === 'フィードバックテスト') { await startClubFeedback(userId, event.replyToken, true); return; }
   }
 
   const session = await getClubSession(userId);
@@ -167,6 +170,9 @@ async function handleClubEvent(event) {
     [CLUB_STATE.REQ_END]:      handleReqEnd,
     [CLUB_STATE.REQ_LOCATION]: handleReqLocation,
     [CLUB_STATE.REQ_CONFIRM]:  handleReqConfirm,
+    [CLUB_STATE.CFB_SESSION]:  handleCfbSession,
+    [CLUB_STATE.CFB_RATING]:   handleCfbRating,
+    [CLUB_STATE.CFB_COMMENT]:  handleCfbComment,
   };
 
   if (handlers[state]) {
