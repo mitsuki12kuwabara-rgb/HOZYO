@@ -12,6 +12,7 @@ const {
   startAbsenceReport, handleReportSession, handleReportDate,
   handleReportReason, handleReportConfirm,
   startFeedback, handleFbSession, handleFbRating, handleFbComment,
+  startTermination, handleTermSession, handleTermConfirm,
 } = require('./flow');
 const { handlePostback }    = require('./admin');
 const { resendCertificate } = require('./certificate');
@@ -27,6 +28,7 @@ const {
   handleReqLocation, handleReqConfirm,
   handleClubInquiry,
   startClubFeedback, handleCfbSession, handleCfbRating, handleCfbComment,
+  startClubTermination, handleCtermSession, handleCtermConfirm,
 } = require('./clubFlow');
 const { getClubSession }    = require('./gasClient');
 const config                = require('./config');
@@ -90,6 +92,7 @@ async function handleEvent(event) {
     if (t === 'マッチング確認')       { await handleMatchingCheck(userId, event.replyToken); return; }
     if (t === 'お問い合わせ' || t === '問い合わせ') { await handleInquiry(userId, event.replyToken); return; }
     if (t === '都合が悪い日を報告')   { await startAbsenceReport(userId, event.replyToken); return; }
+    if (t === 'マッチングを終了する') { await startTermination(userId, event.replyToken); return; }
     if (t === 'フィードバックを送る') { await startFeedback(userId, event.replyToken, false); return; }
     if (t === 'フィードバックテスト') { await startFeedback(userId, event.replyToken, true); return; }
   }
@@ -120,6 +123,8 @@ async function handleEvent(event) {
     [STATE.FB_SESSION]:       handleFbSession,
     [STATE.FB_RATING]:        handleFbRating,
     [STATE.FB_COMMENT]:       handleFbComment,
+    [STATE.TERM_SESSION]:     handleTermSession,
+    [STATE.TERM_CONFIRM]:     handleTermConfirm,
   };
 
   if (handlers[state]) {
@@ -155,6 +160,7 @@ async function handleClubEvent(event) {
     if (t === 'お問い合わせ' || t === '問い合わせ') { await handleClubInquiry(userId, event.replyToken); return; }
     if (t === 'フィードバックを送る') { await startClubFeedback(userId, event.replyToken, false); return; }
     if (t === 'フィードバックテスト') { await startClubFeedback(userId, event.replyToken, true); return; }
+    if (t === 'マッチングを終了する') { await startClubTermination(userId, event.replyToken); return; }
   }
 
   const session = await getClubSession(userId);
@@ -171,9 +177,11 @@ async function handleClubEvent(event) {
     [CLUB_STATE.REQ_SLOT_END]:   handleReqSlotEnd,
     [CLUB_STATE.REQ_LOCATION]:   handleReqLocation,
     [CLUB_STATE.REQ_CONFIRM]:    handleReqConfirm,
-    [CLUB_STATE.CFB_SESSION]:  handleCfbSession,
-    [CLUB_STATE.CFB_RATING]:   handleCfbRating,
-    [CLUB_STATE.CFB_COMMENT]:  handleCfbComment,
+    [CLUB_STATE.CFB_SESSION]:    handleCfbSession,
+    [CLUB_STATE.CFB_RATING]:     handleCfbRating,
+    [CLUB_STATE.CFB_COMMENT]:    handleCfbComment,
+    [CLUB_STATE.CTERM_SESSION]:  handleCtermSession,
+    [CLUB_STATE.CTERM_CONFIRM]:  handleCtermConfirm,
   };
 
   if (handlers[state]) {

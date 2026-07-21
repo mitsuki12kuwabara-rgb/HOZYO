@@ -36,5 +36,6 @@ module.exports = {
   saveRequest:       (userId, data)            => call('saveRequest',       { userId, data }),
   getRequest:        (requestId)               => call('getRequest',        { requestId }),
   updateRequest:     (requestId, status, coachUserId) => call('updateRequest', { requestId, status, coachUserId }),
+  endMatch:          (requestId)               => call('endMatch',          { requestId }),
   getCoachesBySport: (sport)                   => call('getCoachesBySport', { sport }),
 };

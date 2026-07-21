@@ -47,6 +47,7 @@ function doPost(e) {
       case 'saveRequest':       return res({ requestId: saveRequest(body.userId, body.data) });
       case 'getRequest':        return res(getRequest(body.requestId));
       case 'updateRequest':     updateRequest(body.requestId, body.status, body.coachUserId); return res({ ok: true });
+      case 'endMatch':          return res(endMatch(body.requestId));
       case 'getCoachesBySport': return res(getCoachesBySport(body.sport));
       default:              return res({ error: 'unknown op' });
     }
@@ -386,6 +387,20 @@ function updateRequest(requestId, status, coachUserId) {
       return;
     }
   }
+}
+
+// ── マッチング終了 ──
+
+function endMatch(requestId) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.REQUESTS);
+  var rows  = sheet.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (rows[i][0] === requestId) {
+      sheet.getRange(i+1, 9).setValue('ENDED');
+      return { ok: true, coachUserId: rows[i][9], clubUserId: rows[i][1] };
+    }
+  }
+  return { error: 'Request not found' };
 }
 
 // ── スポーツ別コーチ一覧（APPROVED のみ） ──

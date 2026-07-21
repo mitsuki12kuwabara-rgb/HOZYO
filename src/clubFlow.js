@@ -20,6 +20,8 @@ const CLUB_STATE = {
   CFB_SESSION:  'CLUB_FB_SESSION',
   CFB_RATING:   'CLUB_FB_RATING',
   CFB_COMMENT:  'CLUB_FB_COMMENT',
+  CTERM_SESSION: 'CLUB_TERM_SESSION',
+  CTERM_CONFIRM: 'CLUB_TERM_CONFIRM',
 };
 
 const SPORTS = ['バスケットボール', 'サッカー', '野球'];
@@ -465,6 +467,118 @@ async function handleCfbComment(userId, message, replyToken, session) {
   }]);
 }
 
+// ── マッチング終了：開始（クラブ側） ──
+async function startClubTermination(userId, replyToken) {
+  const requests = await getRequestsByClub(userId);
+  if (!requests || requests.length === 0) {
+    await clubClient.replyMessage(replyToken, [{ type: 'text', text: '現在マッチング中のコーチがいないため、終了申請できません。' }]);
+    return;
+  }
+  if (requests.length === 1) {
+    const r = requests[0];
+    await saveClubSession(userId, CLUB_STATE.CTERM_CONFIRM, { ctermRequest: r });
+    await clubClient.replyMessage(replyToken, [{
+      type: 'text',
+      text: `以下のマッチングの終了を申請しますか？\n\n【${r.coachName} コーチ】\n${r.days} ${r.startTime}〜${r.endTime}\n${r.reqLocation}\n\n終了後は再度コーチ要請が必要になります。`,
+      quickReply: qr([['⚠️ 終了する', '終了する'], ['キャンセル', 'キャンセル']]),
+    }]);
+    return;
+  }
+  const sessionList = requests.map((r, i) =>
+    `${i + 1}. ${r.coachName} コーチ（${r.days} ${r.startTime}〜${r.endTime}）`
+  ).join('\n');
+  await saveClubSession(userId, CLUB_STATE.CTERM_SESSION, { ctermRequests: requests });
+  await clubClient.replyMessage(replyToken, [{
+    type: 'text',
+    text: `終了するマッチングを選んでください：\n\n${sessionList}`,
+    quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.coachName}`, String(i + 1)])),
+  }]);
+}
+
+// ── マッチング終了：コーチ選択（クラブ側） ──
+async function handleCtermSession(userId, message, replyToken, session) {
+  const requests = session.tempData.ctermRequests || [];
+  const idx = parseInt(message.text?.trim(), 10) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= requests.length) {
+    await clubClient.replyMessage(replyToken, [{
+      type: 'text', text: '番号をボタンから選んでください。',
+      quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.coachName}`, String(i + 1)])),
+    }]);
+    return;
+  }
+  const r = requests[idx];
+  await saveClubSession(userId, CLUB_STATE.CTERM_CONFIRM, { ctermRequest: r });
+  await clubClient.replyMessage(replyToken, [{
+    type: 'text',
+    text: `以下のマッチングの終了を申請しますか？\n\n【${r.coachName} コーチ】\n${r.days} ${r.startTime}〜${r.endTime}\n${r.reqLocation}\n\n終了後は再度コーチ要請が必要になります。`,
+    quickReply: qr([['⚠️ 終了する', '終了する'], ['キャンセル', 'キャンセル']]),
+  }]);
+}
+
+// ── マッチング終了：確認（クラブ側） ──
+async function handleCtermConfirm(userId, message, replyToken, session) {
+  const text = message.text?.trim();
+  if (text === 'キャンセル') {
+    await saveClubSession(userId, CLUB_STATE.REGISTERED, {});
+    await clubClient.replyMessage(replyToken, [{ type: 'text', text: 'キャンセルしました。' }]);
+    return;
+  }
+  if (text !== '終了する') return;
+
+  const { ctermRequest: r } = session.tempData;
+  const club = await getClub(userId);
+
+  await clubClient.pushMessage(config.clubAdminUserId, [{
+    type: 'flex',
+    altText: `【終了申請】${club?.name} / ${r.coachName}`,
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: '#c0392b',
+        contents: [{ type: 'text', text: '⚠️ マッチング終了申請', weight: 'bold', size: 'md', color: '#ffffff', wrap: true }],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm',
+        contents: [
+          { type: 'box', layout: 'horizontal', margin: 'sm', contents: [
+            { type: 'text', text: '申請者', size: 'sm', color: '#777777', flex: 2 },
+            { type: 'text', text: 'クラブ側', size: 'sm', color: '#111111', flex: 4, wrap: true },
+          ]},
+          { type: 'box', layout: 'horizontal', margin: 'sm', contents: [
+            { type: 'text', text: 'クラブ名', size: 'sm', color: '#777777', flex: 2 },
+            { type: 'text', text: club?.name || '', size: 'sm', color: '#111111', flex: 4, wrap: true },
+          ]},
+          { type: 'box', layout: 'horizontal', margin: 'sm', contents: [
+            { type: 'text', text: 'コーチ名', size: 'sm', color: '#777777', flex: 2 },
+            { type: 'text', text: r.coachName, size: 'sm', color: '#111111', flex: 4, wrap: true },
+          ]},
+          { type: 'box', layout: 'horizontal', margin: 'sm', contents: [
+            { type: 'text', text: 'スケジュール', size: 'sm', color: '#777777', flex: 2 },
+            { type: 'text', text: `${r.days} ${r.startTime}〜${r.endTime}`, size: 'sm', color: '#111111', flex: 4, wrap: true },
+          ]},
+          { type: 'text', text: `要請ID：${r.requestId}`, size: 'xxs', color: '#aaaaaa', margin: 'md' },
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical', paddingAll: '12px',
+        contents: [{
+          type: 'button', style: 'primary', color: '#c0392b',
+          action: {
+            type: 'postback', label: '✅ 終了を承認する',
+            data: `action=end_match&requestId=${r.requestId}&coachUserId=${r.coachUserId}`,
+          },
+        }],
+      },
+    },
+  }]);
+
+  await saveClubSession(userId, CLUB_STATE.REGISTERED, {});
+  await clubClient.replyMessage(replyToken, [{
+    type: 'text',
+    text: `終了申請を送信しました。\n\n運営が確認次第、${r.coachName} コーチとのマッチングを終了します。\nしばらくお待ちください。`,
+  }]);
+}
+
 // ── 問い合わせ ──
 async function handleClubInquiry(userId, replyToken) {
   await clubClient.replyMessage(replyToken, [{
@@ -518,4 +632,7 @@ module.exports = {
   handleCfbSession,
   handleCfbRating,
   handleCfbComment,
+  startClubTermination,
+  handleCtermSession,
+  handleCtermConfirm,
 };

@@ -862,6 +862,108 @@ async function handleFbComment(userId, message, replyToken, session) {
   }]);
 }
 
+// ── マッチング終了：開始 ──
+async function startTermination(userId, replyToken) {
+  const requests = await getRequestsByCoach(userId);
+  if (!requests || requests.length === 0) {
+    await client.replyMessage(replyToken, [{ type: 'text', text: '現在マッチング中のセッションがないため、終了申請できません。' }]);
+    return;
+  }
+  if (requests.length === 1) {
+    const r = requests[0];
+    await saveSession(userId, STATE.TERM_CONFIRM, { termRequest: r });
+    await client.replyMessage(replyToken, [{
+      type: 'text',
+      text: `以下のマッチングの終了を申請しますか？\n\n【${r.clubName}】\n${r.days} ${r.startTime}〜${r.endTime}\n${r.reqLocation}\n\n終了後は再マッチングが必要になります。`,
+      quickReply: qr([['⚠️ 終了する', '終了する'], ['キャンセル', 'キャンセル']]),
+    }]);
+    return;
+  }
+  const sessionList = requests.map((r, i) =>
+    `${i + 1}. ${r.clubName}（${r.days} ${r.startTime}〜${r.endTime}）`
+  ).join('\n');
+  await saveSession(userId, STATE.TERM_SESSION, { termRequests: requests });
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: `終了するマッチングを選んでください：\n\n${sessionList}`,
+    quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.clubName}`, String(i + 1)])),
+  }]);
+}
+
+// ── マッチング終了：セッション選択 ──
+async function handleTermSession(userId, message, replyToken, session) {
+  const requests = session.tempData.termRequests || [];
+  const idx = parseInt(message.text?.trim(), 10) - 1;
+  if (isNaN(idx) || idx < 0 || idx >= requests.length) {
+    await client.replyMessage(replyToken, [{
+      type: 'text', text: '番号をボタンから選んでください。',
+      quickReply: qr(requests.slice(0, 12).map((r, i) => [`${i + 1}. ${r.clubName}`, String(i + 1)])),
+    }]);
+    return;
+  }
+  const r = requests[idx];
+  await saveSession(userId, STATE.TERM_CONFIRM, { termRequest: r });
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: `以下のマッチングの終了を申請しますか？\n\n【${r.clubName}】\n${r.days} ${r.startTime}〜${r.endTime}\n${r.reqLocation}\n\n終了後は再マッチングが必要になります。`,
+    quickReply: qr([['⚠️ 終了する', '終了する'], ['キャンセル', 'キャンセル']]),
+  }]);
+}
+
+// ── マッチング終了：確認 ──
+async function handleTermConfirm(userId, message, replyToken, session) {
+  const text = message.text?.trim();
+  if (text === 'キャンセル') {
+    await saveSession(userId, STATE.APPROVED, {});
+    await client.replyMessage(replyToken, [{ type: 'text', text: 'キャンセルしました。' }]);
+    return;
+  }
+  if (text !== '終了する') return;
+
+  const { termRequest: r } = session.tempData;
+  const user = await getUser(userId);
+  const { clubClient } = require('./clubClient');
+
+  await clubClient.pushMessage(config.clubAdminUserId, [{
+    type: 'flex',
+    altText: `【終了申請】${user?.name} / ${r.clubName}`,
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: '#c0392b',
+        contents: [{ type: 'text', text: '⚠️ マッチング終了申請', weight: 'bold', size: 'md', color: '#ffffff', wrap: true }],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'sm',
+        contents: [
+          row('申請者',     'コーチ側'),
+          row('コーチ名',   user?.name || ''),
+          row('クラブ名',   r.clubName),
+          row('スケジュール', `${r.days} ${r.startTime}〜${r.endTime}`),
+          row('場所',       r.reqLocation),
+          { type: 'text', text: `要請ID：${r.requestId}`, size: 'xxs', color: '#aaaaaa', margin: 'md' },
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical', paddingAll: '12px',
+        contents: [{
+          type: 'button', style: 'primary', color: '#c0392b',
+          action: {
+            type: 'postback', label: '✅ 終了を承認する',
+            data: `action=end_match&requestId=${r.requestId}&coachUserId=${userId}`,
+          },
+        }],
+      },
+    },
+  }]);
+
+  await saveSession(userId, STATE.APPROVED, {});
+  await client.replyMessage(replyToken, [{
+    type: 'text',
+    text: `終了申請を送信しました。\n\n運営が確認次第、${r.clubName}とのマッチングを終了します。\nしばらくお待ちください。`,
+  }]);
+}
+
 // ── 登録済みメニュー ──
 async function handleMatchingCheck(userId, replyToken) {
   await client.replyMessage(replyToken, [{
@@ -880,4 +982,5 @@ module.exports = {
   startAbsenceReport, handleReportSession, handleReportDate,
   handleReportReason, handleReportConfirm,
   startFeedback, handleFbSession, handleFbRating, handleFbComment,
+  startTermination, handleTermSession, handleTermConfirm,
 };

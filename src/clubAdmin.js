@@ -1,6 +1,6 @@
 const { clubClient }                       = require('./clubClient');
 const { client }                           = require('./lineClient');
-const { getRequest, updateRequest,
+const { getRequest, updateRequest, endMatch,
         getCoachesBySport, getClub, getUser } = require('./gasClient');
 const config                               = require('./config');
 
@@ -21,6 +21,7 @@ async function handleClubPostback(userId, data, replyToken) {
   const p = parsePostback(data);
   if (p.action === 'list_coaches') await listCoaches(p, replyToken);
   if (p.action === 'club_match')   await doMatch(p, replyToken);
+  if (p.action === 'end_match')    await doEndMatch(p, replyToken);
 }
 
 // ── コーチ一覧を管理者に送る ──
@@ -86,6 +87,43 @@ async function doMatch({ requestId, coachUserId, clubUserId }, replyToken) {
   await clubClient.replyMessage(replyToken, [{
     type: 'text',
     text: `✅ マッチング完了！\nコーチ：${coach.name}\nクラブ：${club.name}\n両者に通知しました。`,
+  }]);
+}
+
+// ── マッチング終了承認 ──
+async function doEndMatch({ requestId, coachUserId }, replyToken) {
+  const [request, coach] = await Promise.all([
+    getRequest(requestId),
+    getUser(coachUserId),
+  ]);
+
+  if (!request) {
+    await clubClient.replyMessage(replyToken, [{ type: 'text', text: '要請データが見つかりませんでした。' }]);
+    return;
+  }
+
+  const club = await getClub(request.clubUserId);
+
+  await endMatch(requestId);
+
+  const msg = 'これまでのご協力ありがとうございました。\nまたのご利用をお待ちしております。\n\nご不明な点は「お問い合わせ」よりご連絡ください。';
+
+  if (coach) {
+    await client.pushMessage(coach.userId, [{
+      type: 'text',
+      text: `【マッチング終了のお知らせ】\n\n${club?.name || ''} とのマッチングが終了しました。\n\n${msg}`,
+    }]);
+  }
+  if (club) {
+    await clubClient.pushMessage(club.userId, [{
+      type: 'text',
+      text: `【マッチング終了のお知らせ】\n\n${coach?.name || ''} コーチとのマッチングが終了しました。\n\n${msg}`,
+    }]);
+  }
+
+  await clubClient.replyMessage(replyToken, [{
+    type: 'text',
+    text: `✅ マッチングを終了しました。\nコーチ：${coach?.name || coachUserId}\nクラブ：${club?.name || request.clubUserId}\n両者に通知しました。`,
   }]);
 }
 
